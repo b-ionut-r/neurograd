@@ -659,7 +659,7 @@ This framework implements concepts from:
 
 ### 📖 **Tutorials**
 
-Check the `comprehensive_framework_test.ipynb` notebook for extensive examples and testing of all framework components.
+Check the `neurograd_test.ipynb` notebook for extensive examples and testing of all framework components.
 
 ---
 
