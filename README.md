@@ -11,7 +11,7 @@
 [![CuPy](https://img.shields.io/badge/CuPy-GPU%20Support-green.svg)](https://cupy.dev)
 [![License](https://img.shields.io/badge/License-MIT-red.svg)](LICENSE)
 
-*Built from scratch with minimal AI assistance - showcasing pure algorithmic understanding*
+*Built from scratch with no AI assistance - showcasing pure algorithmic understanding*
 
 </div>
 
@@ -659,7 +659,7 @@ This framework implements concepts from:
 
 ### 📖 **Tutorials**
 
-Check the `comprehensive_framework_test.ipynb` notebook for extensive examples and testing of all framework components.
+Check the `neurograd_test.ipynb` notebook for extensive examples and testing of all framework components.
 
 ---
 
