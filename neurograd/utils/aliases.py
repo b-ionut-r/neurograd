@@ -19,6 +19,7 @@ LOSSES = {
     "categorical_crossentropy": lambda: CategoricalCrossEntropy()
 }
 
+
 # Note: Initializer aliases require parameters, so they're defined as dictionaries
 INITIALIZERS = {
     "xavier": Xavier,
