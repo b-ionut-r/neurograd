@@ -1,6 +1,6 @@
-from ..module import ModuleMixin
+from ..module import Module
 
-class Dropout(ModuleMixin):
+class Dropout(Module):
     def __init__(self, dropout_rate: float):
         self.dropout_rate = dropout_rate
         super().__init__()

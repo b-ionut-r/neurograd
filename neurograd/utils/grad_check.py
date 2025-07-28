@@ -1,5 +1,5 @@
 from neurograd import xp, Tensor
-from neurograd.nn.module import ModuleMixin
+from neurograd.nn.module import Module
 from .aliases import LOSSES
 from typing import Union
 
@@ -9,8 +9,8 @@ class GradientChecker:
     def __init__(self, epsilon: float = 1e-4):  # float32 default
         self.epsilon = epsilon
 
-    def check(self, module: ModuleMixin, X: Union[Tensor, xp.ndarray], y: Union[Tensor, xp.ndarray],
-              loss_fn: Union[str, ModuleMixin]) -> bool:
+    def check(self, module: Module, X: Union[Tensor, xp.ndarray], y: Union[Tensor, xp.ndarray],
+              loss_fn: Union[str, Module]) -> bool:
         # Convert inputs to Tensors if needed
         if not isinstance(X, Tensor):
             X = Tensor(X)
@@ -83,8 +83,8 @@ class GradientChecker:
         return ok
 
 
-def gradient_check(model: ModuleMixin, X: Union[Tensor, xp.ndarray], y: Union[Tensor, xp.ndarray], 
-                  loss_fn: Union[str, ModuleMixin], epsilon: float = 1e-4) -> bool:
+def gradient_check(model: Module, X: Union[Tensor, xp.ndarray], y: Union[Tensor, xp.ndarray], 
+                  loss_fn: Union[str, Module], epsilon: float = 1e-4) -> bool:
     """
     Convenience function for gradient checking.
     

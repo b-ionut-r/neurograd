@@ -1,13 +1,13 @@
 from neurograd import xp
 from .base import Function
-from neurograd.nn.module import ModuleMixin
+from neurograd.nn.module import Module
 
 ### Element-wise operations classes for Functional API
-class Add(Function, ModuleMixin):
+class Add(Function, Module):
     name = "Add"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
         return a + b
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
@@ -18,11 +18,11 @@ class Add(Function, ModuleMixin):
         
         return a_grad, b_grad
 
-class Sub(Function, ModuleMixin):
+class Sub(Function, Module):
     name = "Sub"    
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
         return a - b
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
@@ -33,12 +33,12 @@ class Sub(Function, ModuleMixin):
         
         return a_grad, b_grad
 
-class Mul(Function, ModuleMixin):
+class Mul(Function, Module):
     name = "Mul"
     """Element-wise multiplication."""
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
         return a * b
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
@@ -49,12 +49,12 @@ class Mul(Function, ModuleMixin):
         
         return a_grad, b_grad
 
-class Div(Function, ModuleMixin):
+class Div(Function, Module):
     name = "Div"
     """Element-wise division."""
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
         return a / b
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
@@ -65,12 +65,12 @@ class Div(Function, ModuleMixin):
         
         return a_grad, b_grad
 
-class Pow(Function, ModuleMixin):
+class Pow(Function, Module):
     name = "Pow"
     """Element-wise power."""
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
         return a ** b
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:

@@ -1,7 +1,7 @@
-from ..module import ModuleMixin
+from ..module import Module
 
 
-class BatchNorm(ModuleMixin):
+class BatchNorm(Module):
 
     def __init__(self, batch_momentum=0.9, epsilon=1e-8):
         self.batch_momentum = batch_momentum

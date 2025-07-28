@@ -1,17 +1,17 @@
 from neurograd import xp
 from neurograd.functions.base import Function
 from neurograd.functions.activations import Sigmoid, Softmax
-from .module import ModuleMixin
+from .module import Module
 from typing import Tuple, Optional
 
 
 ### Loss functions with Functional Class API
 
-class MSE(Function, ModuleMixin):
+class MSE(Function, Module):
     name = "MSE"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     
     def forward(self, y_true: xp.ndarray, y_pred: xp.ndarray) -> xp.ndarray:
         return xp.mean((y_true - y_pred) ** 2)
@@ -24,11 +24,11 @@ class MSE(Function, ModuleMixin):
         return grad_y_true, grad_y_pred
     
 
-class RMSE(Function, ModuleMixin):
+class RMSE(Function, Module):
     name = "RMSE"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.rmse = None
     
     def forward(self, y_true: xp.ndarray, y_pred: xp.ndarray) -> xp.ndarray:
@@ -45,11 +45,11 @@ class RMSE(Function, ModuleMixin):
         return grad_y_true, grad_y_pred
 
 
-class MAE(Function, ModuleMixin):
+class MAE(Function, Module):
     name = "MAE"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     
     def forward(self, y_true: xp.ndarray, y_pred: xp.ndarray) -> xp.ndarray:
         return xp.mean(xp.abs(y_true - y_pred))
@@ -64,11 +64,11 @@ class MAE(Function, ModuleMixin):
         return grad_y_true, grad_y_pred
     
 
-class BinaryCrossEntropy(Function, ModuleMixin):
+class BinaryCrossEntropy(Function, Module):
     name = "BinaryCrossEntropy"
     def __init__(self, from_logits=False, epsilon=1e-7):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.from_logits = from_logits
         self.epsilon = epsilon
     
@@ -104,11 +104,11 @@ class BinaryCrossEntropy(Function, ModuleMixin):
         return y_true_grad, y_pred_grad
 
 
-class CategoricalCrossEntropy(Function, ModuleMixin):
+class CategoricalCrossEntropy(Function, Module):
     name = "CategoricalCrossEntropy"
     def __init__(self, from_logits=False, epsilon=1e-7):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.from_logits = from_logits
         self.epsilon = epsilon
     

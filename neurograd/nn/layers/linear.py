@@ -1,7 +1,7 @@
 from neurograd.functions.activations import ReLU
-from ..module import ModuleMixin
+from ..module import Module
 
-class Linear(ModuleMixin):
+class Linear(Module):
 
     def __init__(self, in_features: int, out_features: int, activation = "passthrough", 
                  dropout = 0.0, weights_initializer = "normal", bias_initializer = "zeros",
@@ -96,7 +96,7 @@ class Linear(ModuleMixin):
         return A
 
 
-class MLP(ModuleMixin):
+class MLP(Module):
     def __init__(self, layers_sizes):
         from neurograd.functions.activations import ReLU
         super().__init__()

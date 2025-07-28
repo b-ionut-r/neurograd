@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from neurograd.tensor import Tensor
 
 
-class ModuleMixin:
+class Module:
     """Base class providing Module functionality for neural network components."""
     def __init__(self):
         self._parameters = {}
@@ -22,7 +22,7 @@ class ModuleMixin:
         self._parameters[name] = param
         super().__setattr__(name, param)
 
-    def add_module(self, name: str, module: "ModuleMixin"):
+    def add_module(self, name: str, module: "Module"):
         self._modules[name] = module
         super().__setattr__(name, module)
 
@@ -32,7 +32,7 @@ class ModuleMixin:
         for module in self._modules.values():
             yield from module.parameters()
 
-    def modules(self) -> Generator['ModuleMixin', None, None]:
+    def modules(self) -> Generator['Module', None, None]:
         yield self
         for module in self._modules.values():
             yield from module.modules()
@@ -63,15 +63,15 @@ class ModuleMixin:
         super().__setattr__(name, value)
         
         # Then register in appropriate dictionary if initialized
-        if isinstance(value, ModuleMixin) and hasattr(self, '_modules'):
+        if isinstance(value, Module) and hasattr(self, '_modules'):
             self._modules[name] = value
         elif isinstance(value, Tensor) and hasattr(self, '_parameters'):
             self._parameters[name] = value
 
 
-class Sequential(ModuleMixin):
+class Sequential(Module):
     """A container for a sequence of modules."""
-    def __init__(self, *modules: ModuleMixin):
+    def __init__(self, *modules: Module):
         super().__init__()
         self._sequential_modules = modules
         for i, module in enumerate(modules):

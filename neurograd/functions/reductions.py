@@ -1,12 +1,12 @@
 from neurograd import xp
 from .base import Function
-from neurograd.nn.module import ModuleMixin
+from neurograd.nn.module import Module
 
-class Sum(Function, ModuleMixin):
+class Sum(Function, Module):
     name = "Sum"
     def __init__(self, axis=None, keepdims=False):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.axis = axis
         self.keepdims = keepdims
     
@@ -27,11 +27,11 @@ class Sum(Function, ModuleMixin):
         grad = xp.broadcast_to(grad, x.data.shape)
         return grad
 
-class Mean(Function, ModuleMixin):
+class Mean(Function, Module):
     name = "Mean"
     def __init__(self, axis=None, keepdims=False):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.axis = axis
         self.keepdims = keepdims
     
@@ -68,11 +68,11 @@ class Mean(Function, ModuleMixin):
         grad = xp.broadcast_to(grad, x.data.shape)
         return grad
 
-class Max(Function, ModuleMixin):
+class Max(Function, Module):
     name = "Max"
     def __init__(self, axis=None, keepdims=False):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.axis = axis
         self.keepdims = keepdims
     
@@ -114,11 +114,11 @@ class Max(Function, ModuleMixin):
         grad = xp.broadcast_to(grad, x.data.shape) * mask
         return grad
 
-class Min(Function, ModuleMixin):
+class Min(Function, Module):
     name = "Min"
     def __init__(self, axis=None, keepdims=False):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.axis = axis
         self.keepdims = keepdims
     
@@ -161,11 +161,11 @@ class Min(Function, ModuleMixin):
         return grad
 
 
-class Std(Function, ModuleMixin):
+class Std(Function, Module):
     name = "Std"
     def __init__(self, axis=None, keepdims=False, ddof=0):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.axis = axis
         self.keepdims = keepdims
         self.ddof = ddof  # Delta degrees of freedom

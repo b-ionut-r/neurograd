@@ -1,14 +1,14 @@
 from neurograd import xp
 from neurograd.functions.base import Function
-from neurograd.nn.module import ModuleMixin
+from neurograd.nn.module import Module
 
 ### Activation functions classes for Functional API
 # These classes implement common activation functions used in neural networks.
-class ReLU(Function, ModuleMixin):
+class ReLU(Function, Module):
     name = "ReLU"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, x: xp.ndarray) -> xp.ndarray:
         return xp.maximum(0, x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
@@ -16,11 +16,11 @@ class ReLU(Function, ModuleMixin):
         x_grad = grad_output * (x.data > 0) if x.requires_grad else None
         return x_grad
 
-class Sigmoid(Function, ModuleMixin):
+class Sigmoid(Function, Module):
     name = "Sigmoid"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.sigmoid_x = None
     def forward(self, x: xp.ndarray) -> xp.ndarray:
         self.sigmoid_x = 1 / (1 + xp.exp(-x))
@@ -30,11 +30,11 @@ class Sigmoid(Function, ModuleMixin):
         x_grad = grad_output * self.sigmoid_x * (1 - self.sigmoid_x) if x.requires_grad else None
         return x_grad
 
-class Softmax(Function, ModuleMixin):
+class Softmax(Function, Module):
     name = "Softmax"
     def __init__(self, axis: int = 0, keepdims: bool = True):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.axis = axis
         self.keepdims = keepdims
         self.softmax_x = None
@@ -48,11 +48,11 @@ class Softmax(Function, ModuleMixin):
         x_grad = self.softmax_x * (grad_output - dot_product) if x.requires_grad else None
         return x_grad
 
-class Tanh(Function, ModuleMixin):
+class Tanh(Function, Module):
     name = "Tanh"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.tanh_x = None
     def forward(self, x: xp.ndarray) -> xp.ndarray:
         self.tanh_x = xp.tanh(x)
@@ -62,11 +62,11 @@ class Tanh(Function, ModuleMixin):
         x_grad = grad_output * (1 - self.tanh_x ** 2) if x.requires_grad else None
         return x_grad
 
-class LeakyReLU(Function, ModuleMixin):
+class LeakyReLU(Function, Module):
     name = "LeakyReLU"
     def __init__(self, negative_slope: float = 0.01):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
         self.negative_slope = negative_slope
     def forward(self, x: xp.ndarray) -> xp.ndarray:
         return xp.where(x >= 0, x, self.negative_slope * x)
@@ -76,11 +76,11 @@ class LeakyReLU(Function, ModuleMixin):
         return x_grad
     
 
-class Passthrough(Function, ModuleMixin):
+class Passthrough(Function, Module):
     name = "Passthrough"
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, x: xp.ndarray) -> xp.ndarray:
         return x
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:

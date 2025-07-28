@@ -1,17 +1,17 @@
 from neurograd import xp
 from .base import Function
-from neurograd.nn.module import ModuleMixin
+from neurograd.nn.module import Module
 
 # TODO: Add more matrix operations, like splits, stacking and convolutions.
 
 # Matrix OPS classes for Functional API
 # These classes implement matrix operations like matrix multiplication, transpose, etc.
-class MatMul(Function, ModuleMixin):
+class MatMul(Function, Module):
     name = "MatMul"
     """Matrix multiplication A @ B"""
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
         return xp.matmul(a, b)
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
@@ -31,12 +31,12 @@ class MatMul(Function, ModuleMixin):
                 grad_b = xp.matmul(a.data.T, grad_output)
         return grad_a, grad_b
     
-class Transpose(Function, ModuleMixin):
+class Transpose(Function, Module):
     name = "Transpose"
     """Transpose of a matrix"""
     def __init__(self):
         Function.__init__(self)
-        ModuleMixin.__init__(self)
+        Module.__init__(self)
     def forward(self, a: xp.ndarray) -> xp.ndarray:
         return xp.transpose(a)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
