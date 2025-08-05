@@ -1,23 +1,13 @@
-#!/usr/bin/env python3
-"""
-NeuroGrad Setup Script
-
-This file provides backward compatibility for older pip versions
-and development installations. The main configuration is in pyproject.toml.
-"""
-
-import sys
 from setuptools import setup, find_packages
 
-# Minimum Python version check
-if sys.version_info < (3, 7):
-    sys.exit("NeuroGrad requires Python 3.7 or higher")
-
-# Read long description from README
+# Read README.md for long description
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-# Define package metadata and dependencies
+# Read requirements from requirements.txt
+with open("requirements.txt", "r", encoding="utf-8") as fh:
+    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+
 setup(
     name="neurograd",
     version="0.1.0",
@@ -30,9 +20,9 @@ setup(
     project_urls={
         "Bug Tracker": "https://github.com/b-ionut-r/neurograd/issues",
         "Documentation": "https://github.com/b-ionut-r/neurograd#readme",
-        "Source Code": "https://github.com/b-ionut-r/neurograd",
+        "Repository": "https://github.com/b-ionut-r/neurograd",
     },
-    packages=find_packages(exclude=["tests*", "examples*", "docs*"]),
+    packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -51,16 +41,10 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires=">=3.7",
-    install_requires=[
-        "numpy>=1.19.0",
-    ],
+    install_requires=requirements,
     extras_require={
-        "gpu": [
-            "cupy-cuda12x>=12.0.0",
-        ],
-        "visualization": [
-            "matplotlib>=3.3.0",
-        ],
+        "gpu": ["cupy-cuda12x>=12.0.0"],
+        "visualization": ["matplotlib>=3.3.0"],
         "examples": [
             "scikit-learn>=0.24.0",
             "matplotlib>=3.3.0",
@@ -91,6 +75,10 @@ setup(
             "mypy",
         ],
     },
+    include_package_data=True,
+    package_data={
+        "neurograd": ["py.typed"],
+    },
     keywords=[
         "deep-learning",
         "neural-networks", 
@@ -101,8 +89,6 @@ setup(
         "gpu",
         "cuda",
         "conv2d",
-        "backpropagation",
+        "backpropagation"
     ],
-    include_package_data=True,
-    zip_safe=False,
 )
