@@ -48,9 +48,9 @@ class Tensor:
         visited = set()
         
         def build_topo(tensor):
-            if tensor in visited:
+            if id(tensor) in visited:
                 return
-            visited.add(tensor)
+            visited.add(id(tensor))
             
             # Only process if this tensor has a grad_fn (not a leaf)
             if tensor.grad_fn is not None:

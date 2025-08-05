@@ -93,7 +93,7 @@ class Conv2D(Module):
 class MaxPool2D(Module):
     def __init__(self,
                 pool_size: Union[int, Tuple[int, ...]] = (2, 2),
-                strides: Union[int, Tuple[int, ...]] = (1, 1),
+                strides: Union[int, Tuple[int, ...]] = (2, 2),
                 padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                 padding_value: Union[int, float] = 0,
                 dtype = None):

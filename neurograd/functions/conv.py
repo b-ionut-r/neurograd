@@ -109,7 +109,7 @@ def pool2d(input: Union["Tensor", xp.ndarray],
 
 def maxpool2d(input: Union["Tensor", xp.ndarray], 
               pool_size: Union[int, Tuple[int, ...]],
-              strides: Union[int, Tuple[int, ...]] = (1, 1),
+              strides: Union[int, Tuple[int, ...]] = (2, 2),
               padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
               padding_value: Union[int, float] = 0):
     import neurograd as ng
