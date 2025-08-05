@@ -1,8 +1,7 @@
-from typing import Optional, List, Callable, Union, Literal
 from . import xp
 import numpy as real_np
-import collections
-from queue import Queue
+from typing import Optional, List, Callable, Union, Tuple, Sequence
+from numpy.typing import ArrayLike
 
 
 class Tensor:
@@ -24,7 +23,7 @@ class Tensor:
         self.device = 'cpu' if xp is real_np else 'cuda'
 
 
-    def backward(self, grad: Optional = None, retain_graph: bool = False):
+    def backward(self, grad = None, retain_graph: bool = False):
         """
         Compute gradients using automatic differentiation.
         
@@ -101,7 +100,6 @@ class Tensor:
                 tensor.grad_fn = None
 
 
-
     def cast(self, dtype):
         try: 
             self.data = xp.asarray(self.data, dtype=dtype)
@@ -109,10 +107,10 @@ class Tensor:
             return self
         except Exception as e:
             raise TypeError(f"{dtype} isn't a supported data type for the array module: {e}.")
+         
     
     def zero_grad(self):
         self.grad = None  # Reset gradient to None
-
     
     def __add__(self, other) -> 'Tensor':
         from .functions.arithmetic import Add
@@ -170,13 +168,17 @@ class Tensor:
         from .functions.linalg import MatMul
         return MatMul()(self, other)
     
-    def dot(self, other) -> 'Tensor':
-        return self.__matmul__(other)
-    
     def __rmatmul__(self, other) -> 'Tensor':
         if isinstance(other, (int, float)):
             other = Tensor(xp.array(other), requires_grad=False)
         return other.__matmul__(self)
+    
+    def dot(self, other) -> 'Tensor':
+        return self.__matmul__(other)
+    
+    def tensordot(self, other, axes) -> 'Tensor':
+        from .functions.linalg import TensorDot
+        return TensorDot(axes=axes)(self, other)
 
     def sum(self, axis=None, keepdims=False) -> 'Tensor':
         """Sum of tensor elements over given axis."""
@@ -202,6 +204,11 @@ class Tensor:
         """Standard deviation of tensor elements over given axis."""
         from .functions.reductions import Std
         return Std(axis=axis, keepdims=keepdims, ddof=ddof)(self)
+    
+    def argmax(self, axis=None) -> 'Tensor':
+        """Indices of maximum values along an axis."""
+        result = xp.argmax(self.data, axis=axis)
+        return Tensor(result, requires_grad=False, name=self.name + "_argmax")
     
     def log(self) -> 'Tensor':
         from .functions.math import Log
@@ -259,10 +266,10 @@ class Tensor:
         from .functions.activations import LeakyReLU
         return LeakyReLU(negative_slope=negative_slope)(self)
     
-    def transpose(self) -> 'Tensor':
+    def transpose(self, axes=None) -> 'Tensor':
         from .functions.linalg import Transpose
-        return Transpose()(self)
-    
+        return Transpose(axes=axes)(self)
+
     @property
     def T(self) -> 'Tensor':
         """Transpose of the tensor."""
@@ -271,47 +278,44 @@ class Tensor:
     def shape(self) -> tuple:
         """Shape of the tensor."""
         return self.data.shape
-    
     @property
     def ndim(self) -> int:
         return self.data.ndim
-    
     @property
     def size(self) -> int:
         return self.data.size
-    
+    @property
+    def ndim(self) -> int:
+        return self.data.ndim
      
     def __len__(self):
         return len(self.data)
+    
+    def reshape(self, new_shape: Union[int, Tuple[int, ...]]) -> 'Tensor':
+        """Reshape the tensor to a new shape."""
+        from .functions.tensor_ops import Reshape
+        return Reshape(new_shape=new_shape)(self)
 
-    def flatten(self, order='C') -> 'Tensor': # copy
-        """Return a flattened copy of the tensor as a 1D array. Always creates a new copy."""
-        flattened_data = self.data.flatten(order=order)  # Always returns a copy
-        return self._new_tensor_like(flattened_data, name=self.name + "_flattened")
+    def flatten(self) -> 'Tensor': # copy
+        """Return a flattened 1D VIEW of the tensor, still attached to the computational graph."""
+        from .functions.tensor_ops import Flatten
+        return Flatten()(self)
     
-    def ravel(self, order='C') -> 'Tensor': # view
-        """Return a flattened view of the tensor when possible, otherwise a copy.
-        
-        Note: When a view is created, changes to the raveled tensor will affect
-        the original tensor and vice versa.
-        """
-        raveled_data = self.data.ravel(order=order)  # Returns view when possible, copy when necessary
-        
-        # Create new tensor but directly assign the data to avoid copying
-        new_tensor = Tensor.__new__(Tensor)  # Create without calling __init__
-        new_tensor.data = raveled_data  # Direct assignment preserves view relationship
-        new_tensor.requires_grad = self.requires_grad
-        new_tensor.grad = None
-        new_tensor.grad_fn = self.grad_fn
-        new_tensor.name = self.name + "_raveled"
-        new_tensor.device = self.device
-        
-        # Check if the underlying data shares memory (is a view)
-        if xp.shares_memory(self.data, raveled_data):
-            new_tensor._is_view_of = self
-        
-        return new_tensor
+    def squeeze(self, axis=None) -> 'Tensor':
+        """Remove dimensions of size 1 from the tensor."""
+        from .functions.tensor_ops import Squeeze
+        return Squeeze(axis=axis)(self)
+
+    def expand_dims(self, axis) -> 'Tensor':
+        """Add new axis of size 1 at specified position"""
+        from .functions.tensor_ops import ExpandDims
+        return ExpandDims(axis=axis)(self)
     
+    def pad(self, pad_width: Union[Sequence, ArrayLike, int], mode='constant', **kwargs) -> 'Tensor':
+        """Pad the tensor with specified padding width and mode."""
+        from .functions.tensor_ops import Pad
+        return Pad(pad_width=pad_width, mode=mode, **kwargs)(self)
+
     def copy(self) -> 'Tensor':
         """Return a copy of the tensor."""
         copied_data = self.data.copy()
@@ -339,7 +343,6 @@ class Tensor:
         else:
             self.data[key] = value
 
-    
     def _new_tensor_like(self, data, name: Optional[str] = None) -> 'Tensor':
         """Create a new tensor with the same metadata as this one."""
         if not name:
@@ -422,3 +425,7 @@ def arange(start: int, stop: int, step: int = 1, dtype: Optional[str] = None) ->
 
 def eye(n: int, dtype: Optional[str] = None) -> Tensor:
     return Tensor(xp.eye(n, dtype=dtype), requires_grad=False)
+
+def argmax(tensor: Tensor, axis: Optional[int] = None) -> Tensor:
+    """Return indices of maximum values along an axis."""
+    return tensor.argmax(axis=axis)

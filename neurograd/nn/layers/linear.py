@@ -1,5 +1,6 @@
-from neurograd.functions.activations import ReLU
 from ..module import Module
+from .batchnorm import BatchNorm
+from .dropout import Dropout
 
 class Linear(Module):
 
@@ -11,87 +12,66 @@ class Linear(Module):
         from neurograd.utils.aliases import ACTIVATIONS, INITIALIZERS
         import neurograd as ng
         
-        if dtype is None:
-            dtype = xp.float32
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        activation_factory = ACTIVATIONS.get(activation, activation)
-        self.activation = activation_factory() if callable(activation_factory) else activation_factory
+        self.activation = ACTIVATIONS[activation]() if isinstance(activation, str) else activation
         self.dropout = dropout
         self.batch_normalization = batch_normalization
         self.batch_momentum = batch_momentum
         self.use_bias = use_bias
+        dtype = dtype if dtype is not None else ng.float32
         self.dtype = dtype
         
-        # Running statistics for batch norm (not trainable parameters)
+        # Create BatchNorm layer if needed
         if batch_normalization:
-            self.running_mean = ng.zeros((out_features, 1)) # Tensor
-            self.running_var = ng.ones((out_features, 1)) # Tensor
+            self.batch_norm = BatchNorm(batch_momentum=batch_momentum)
+            
+        # Create Dropout layer if needed
+        if dropout > 0.0:
+            self.dropout_layer = Dropout(dropout)
         
         # Helper function to instantiate initializers
-        def get_initializer(init_name, n_in):
+        def get_initializer(init_name):
             init_class = INITIALIZERS.get(init_name, init_name)
             init_params = {"dtype": dtype}
-            
             if init_name == "normal":
                 init_params["scale"] = 0.01
-            elif init_name in ["xavier", "he"]:
-                init_params["n_in"] = n_in
-                
+            elif init_name == "xavier":
+                init_params["n_in"] = in_features
+                init_params["n_out"] = out_features
+            elif init_name == "he":
+                init_params["n_in"] = in_features
             return init_class(**init_params) if init_name in ["normal", "xavier", "he", "zeros"] else init_class
-
         # Initialize weights and bias
-        self.weights_initializer = get_initializer(weights_initializer, in_features)
-        self.bias_initializer = get_initializer(bias_initializer, in_features)
+        self.weights_initializer = get_initializer(weights_initializer)
+        self.bias_initializer = get_initializer(bias_initializer)
 
         # Add parameters
-        self.add_parameter(name="weight", param=self.weights_initializer.generate((out_features, in_features)))
+        self.add_parameter(name="weight", param=self.weights_initializer.generate((in_features, out_features)))
         if batch_normalization:
             self.use_bias = False
-            self.add_parameter(name="mean_scaler", param=ng.zeros((out_features, 1))) # beta
-            self.add_parameter(name="std_scaler", param=ng.ones((out_features, 1))) # gamma
         if use_bias:
-            self.add_parameter(name="bias", param=self.bias_initializer.generate((out_features, 1)))
+            self.add_parameter(name="bias", param=self.bias_initializer.generate((out_features,)))
 
     def forward(self, X):
         import neurograd as ng
         from neurograd import xp
-        # X will be of shape in_features x n_samples 
+        # X will be of shape (batch_size, in_features)
         X = X.cast(self.dtype)
-        Z = ng.dot(self.weight, X)
+        Z = ng.matmul(X, self.weight)
         if self.use_bias:
             Z += self.bias
             
         # Apply BatchNorm if needed
         if self.batch_normalization:
-            if self.training:
-                # Training mode: compute batch statistics
-                batch_mean = Z.mean(axis=1, keepdims=True)
-                batch_var = ((Z - batch_mean) ** 2).mean(axis=1, keepdims=True)
-                
-                # Update running statistics (detached from computation graph)
-                self.running_mean.data = (self.batch_momentum * self.running_mean.data + 
-                                        (1 - self.batch_momentum) * batch_mean.data)
-                self.running_var.data = (self.batch_momentum * self.running_var.data + 
-                                       (1 - self.batch_momentum) * batch_var.data)
-                
-                # Normalize using batch statistics
-                Z_norm = (Z - batch_mean) / (batch_var + 1e-8).sqrt()
-            else:
-                # Inference mode: use running statistics
-                Z_norm = (Z - self.running_mean) / (self.running_var + 1e-8).sqrt()
-            
-            # Scale and shift
-            Z = self.std_scaler * Z_norm + self.mean_scaler
+            Z = self.batch_norm(Z)
             
         A = self.activation(Z)
         
         # Apply dropout
-        if self.dropout > 0.0 and self.training:
-            keep_prob = 1.0 - self.dropout
-            mask = xp.random.rand(*A.shape) < keep_prob
-            A = A * mask / keep_prob
+        if self.dropout > 0.0:
+            A = self.dropout_layer(A)
             
         return A
 

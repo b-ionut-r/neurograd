@@ -18,10 +18,15 @@ class Sum(Function, Module):
         if not x.requires_grad:
             return None
         
-        # Expand grad_output to match input shape
+        # For Sum, we just need to broadcast grad_output to input shape
+        # Since forward stored keepdims=True result, we can use that for broadcasting
         grad = grad_output
         if self.axis is not None and not self.keepdims:
-            grad = xp.expand_dims(grad, axis=self.axis)
+            # Add dimensions back by expanding to match what keepdims=True would give
+            for ax in sorted(self.axis if isinstance(self.axis, tuple) else (self.axis,)):
+                # Normalize negative axes
+                ax_norm = ax if ax >= 0 else len(x.data.shape) + ax
+                grad = xp.expand_dims(grad, axis=ax_norm)
         
         # Broadcast to original shape
         grad = xp.broadcast_to(grad, x.data.shape)
@@ -58,12 +63,11 @@ class Mean(Function, Module):
         # Expand and broadcast gradient
         grad = grad_output / n
         if self.axis is not None and not self.keepdims:
-            if isinstance(self.axis, int):
-                grad = xp.expand_dims(grad, axis=self.axis)
-            else:
-                # Handle multiple axes
-                for ax in sorted(self.axis):
-                    grad = xp.expand_dims(grad, axis=ax)
+            # Add dimensions back by expanding to match what keepdims=True would give
+            for ax in sorted(self.axis if isinstance(self.axis, tuple) else (self.axis,)):
+                # Normalize negative axes
+                ax_norm = ax if ax >= 0 else len(x.data.shape) + ax
+                grad = xp.expand_dims(grad, axis=ax_norm)
         
         grad = xp.broadcast_to(grad, x.data.shape)
         return grad
@@ -105,11 +109,22 @@ class Max(Function, Module):
         # Expand and broadcast gradient
         grad = grad_output
         if self.axis is not None and not self.keepdims:
+            # We need to expand grad_output to have the same number of dimensions as x.data
+            # For each reduced axis, we need to add a dimension of size 1
+            
+            # Convert negative axes to positive
+            ndim = len(x.data.shape)
             if isinstance(self.axis, int):
-                grad = xp.expand_dims(grad, axis=self.axis)
+                axis_list = [self.axis if self.axis >= 0 else ndim + self.axis]
             else:
-                for ax in sorted(self.axis):
-                    grad = xp.expand_dims(grad, axis=ax)
+                axis_list = [ax if ax >= 0 else ndim + ax for ax in self.axis]
+            
+            # Sort axes for consistent expansion
+            axis_list = sorted(axis_list)
+            
+            # Add dimensions one by one
+            for ax in axis_list:
+                grad = xp.expand_dims(grad, axis=ax)
         
         grad = xp.broadcast_to(grad, x.data.shape) * mask
         return grad
@@ -151,11 +166,22 @@ class Min(Function, Module):
         # Expand and broadcast gradient
         grad = grad_output
         if self.axis is not None and not self.keepdims:
+            # We need to expand grad_output to have the same number of dimensions as x.data
+            # For each reduced axis, we need to add a dimension of size 1
+            
+            # Convert negative axes to positive
+            ndim = len(x.data.shape)
             if isinstance(self.axis, int):
-                grad = xp.expand_dims(grad, axis=self.axis)
+                axis_list = [self.axis if self.axis >= 0 else ndim + self.axis]
             else:
-                for ax in sorted(self.axis):
-                    grad = xp.expand_dims(grad, axis=ax)
+                axis_list = [ax if ax >= 0 else ndim + ax for ax in self.axis]
+            
+            # Sort axes for consistent expansion
+            axis_list = sorted(axis_list)
+            
+            # Add dimensions one by one
+            for ax in axis_list:
+                grad = xp.expand_dims(grad, axis=ax)
         
         grad = xp.broadcast_to(grad, x.data.shape) * mask
         return grad
@@ -204,10 +230,17 @@ class Std(Function, Module):
         # Expand grad_output to match input shape
         grad_out = grad_output
         if self.axis is not None and not self.keepdims:
+            # Normalize negative axes to positive indices
+            ndim = len(x.data.shape)
             if isinstance(self.axis, int):
-                grad_out = xp.expand_dims(grad_out, axis=self.axis)
+                axis_normalized = self.axis if self.axis >= 0 else ndim + self.axis
+                grad_out = xp.expand_dims(grad_out, axis=axis_normalized)
             else:
-                for ax in sorted(self.axis):
+                # Sort axes in reverse order for proper expansion
+                axes_normalized = []
+                for ax in self.axis:
+                    axes_normalized.append(ax if ax >= 0 else ndim + ax)
+                for ax in sorted(axes_normalized, reverse=True):
                     grad_out = xp.expand_dims(grad_out, axis=ax)
         
         # Broadcast and multiply

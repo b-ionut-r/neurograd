@@ -68,11 +68,13 @@
 
 ### 🧠 **Neural Network Components**
 
-- **Layers**: Linear (Dense), MLP, with batch normalization and dropout
+- **Layers**: Linear (Dense), Conv2D, MaxPool2D/AveragePool2D, MLP, with batch normalization and dropout
 - **Activations**: Comprehensive activation function library
 - **Loss Functions**: MSE, RMSE, MAE, Binary/Categorical Cross-Entropy
 - **Optimizers**: SGD (with momentum), Adam, RMSprop
 - **Initializers**: Xavier/Glorot, He, Normal, Zero initialization
+- **Data Utilities**: Dataset and DataLoader classes for efficient batch processing
+- **Metrics**: Classification metrics (accuracy, precision, recall, F1-score) and regression metrics (R²)
 
 ### 🛠️ **Developer Tools**
 
@@ -124,26 +126,38 @@ print(f"y.grad: {y.grad}")
 from neurograd.nn.layers.linear import Linear, MLP
 from neurograd.nn.losses import MSE
 from neurograd.optim.adam import Adam
+from neurograd.utils.data import Dataset, DataLoader
+from neurograd.nn.metrics import accuracy_score
 
-# Create a simple neural network
+# Create dataset and data loader
+dataset = Dataset(X_train, y_train)
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+# Create a simple neural network  
 model = MLP([784, 128, 64, 10])  # Input -> Hidden -> Hidden -> Output
 
 # Define loss and optimizer
 criterion = MSE()
 optimizer = Adam(model.named_parameters(), lr=0.001)
 
-# Training loop
+# Training loop with batched data
 for epoch in range(100):
-    # Forward pass
-    output = model(X_train)
-    loss = criterion(y_train, output)
+    for X_batch, y_batch in dataloader:
+        # Forward pass
+        output = model(X_batch) 
+        loss = criterion(y_batch, output)
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
     
-    # Backward pass
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    
-    print(f"Epoch {epoch}, Loss: {loss.data:.4f}")
+    # Evaluate accuracy
+    model.eval()
+    pred = model(X_test)
+    acc = accuracy_score(y_test, pred)
+    model.train()  # Switch back to training mode
+    print(f"Epoch {epoch}, Loss: {loss.data:.4f}, Accuracy: {acc:.4f}")
 ```
 
 ---
@@ -272,7 +286,7 @@ y5 = x.std(ddof=1)            # Standard deviation
 ```python
 from neurograd.nn.layers.linear import Linear
 
-# Dense/Fully-connected layer
+# Dense/Fully-connected layer (batch-first: [batch_size, features])
 layer = Linear(
     in_features=784, 
     out_features=128,
@@ -282,7 +296,44 @@ layer = Linear(
     weights_initializer="he"    # He initialization
 )
 
+# Input shape: (batch_size, 784) -> Output shape: (batch_size, 128)
 output = layer(input_tensor)
+```
+
+#### Convolutional Layers
+
+NeuroGrad uses the **channels-first (NCHW)** convention for all convolutional operations, where tensors are shaped as `(batch_size, channels, height, width)`.
+
+```python
+from neurograd.nn.layers.conv import Conv2D, MaxPool2D, AveragePool2D
+
+# 2D Convolutional layer
+conv_layer = Conv2D(
+    in_channels=3,              # RGB input
+    out_channels=64,            # 64 feature maps
+    kernel_size=(3, 3),         # 3x3 kernels
+    strides=(1, 1),             # Stride of 1
+    padding="same",             # Same padding
+    activation="relu",          # Built-in ReLU
+    batch_normalization=True,   # Batch normalization
+    dropout=0.1                 # Dropout after activation
+)
+
+# Max pooling layer
+maxpool = MaxPool2D(
+    pool_size=(2, 2),           # 2x2 pooling window
+    strides=(2, 2),             # Stride of 2
+    padding="valid"             # No padding
+)
+
+# Average pooling layer
+avgpool = AveragePool2D(pool_size=(2, 2))
+
+# Input shape: (batch_size, channels, height, width)
+# Conv2D: (32, 3, 28, 28) -> (32, 64, 28, 28)
+# MaxPool2D: (32, 64, 28, 28) -> (32, 64, 14, 14)
+conv_out = conv_layer(input_image)  
+pooled_out = maxpool(conv_out)
 ```
 
 #### Multi-Layer Perceptron
@@ -370,6 +421,55 @@ optimizer = Adam(
 optimizer.zero_grad()
 loss.backward()
 optimizer.step()
+```
+
+### Data Utilities
+
+```python
+from neurograd.utils.data import Dataset, DataLoader
+
+# Create dataset
+X = [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]  # Features
+y = [0, 1, 0]                              # Labels
+dataset = Dataset(X, y)
+
+# Create data loader with batching and shuffling
+dataloader = DataLoader(
+    dataset, 
+    batch_size=32,
+    shuffle=True,      # Shuffle data each epoch
+    seed=42           # Reproducible shuffling
+)
+
+# Iterate through batches
+for batch_idx, (X_batch, y_batch) in enumerate(dataloader):
+    # X_batch and y_batch are Tensors ready for training
+    output = model(X_batch)
+    loss = criterion(y_batch, output)
+```
+
+### Evaluation Metrics
+
+```python
+from neurograd.nn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    r2_score, confusion_matrix
+)
+
+# Classification metrics
+y_true = ng.Tensor([0, 1, 1, 0, 1])
+y_pred = ng.Tensor([0, 1, 0, 0, 1])
+
+accuracy = accuracy_score(y_true, y_pred)       # 0.8
+precision = precision_score(y_true, y_pred)     # Binary precision
+recall = recall_score(y_true, y_pred)           # Binary recall
+f1 = f1_score(y_true, y_pred)                  # F1-score
+cm = confusion_matrix(y_true, y_pred)           # 2x2 confusion matrix
+
+# Regression metrics
+y_true_reg = ng.Tensor([1.0, 2.0, 3.0])
+y_pred_reg = ng.Tensor([1.1, 1.9, 3.2])
+r2 = r2_score(y_true_reg, y_pred_reg)           # R-squared score
 ```
 
 ---
@@ -475,9 +575,9 @@ X, y = make_regression(n_samples=1000, n_features=20, noise=0.1)
 scaler = StandardScaler()
 X = scaler.fit_transform(X)
 
-# Convert to tensors (note: shape is [features, samples])
-X_tensor = ng.Tensor(X.T, requires_grad=True)
-y_tensor = ng.Tensor(y.reshape(1, -1))
+# Convert to tensors (batch-first convention: [samples, features])
+X_tensor = ng.Tensor(X, requires_grad=True)
+y_tensor = ng.Tensor(y.reshape(-1, 1))
 
 # Create model
 model = MLP([20, 64, 32, 1])
@@ -569,13 +669,20 @@ neurograd/
 │   ├── math.py          # log, exp, sin, cos, etc.
 │   ├── linalg.py        # Matrix operations
 │   ├── activations.py   # Neural network activations
+│   ├── conv.py          # Convolution operations
+│   ├── tensor_ops.py    # Tensor manipulation ops
 │   └── reductions.py    # sum, mean, max, etc.
 ├── nn/                   # Neural network components
 │   ├── module.py        # Base module system
 │   ├── layers/          # Network layers
+│   │   ├── linear.py    # Linear/Dense layers
+│   │   ├── conv.py      # Convolutional layers
+│   │   ├── batchnorm.py # Batch normalization
+│   │   └── dropout.py   # Dropout layers
 │   ├── losses.py        # Loss functions
 │   ├── activations.py   # Activation layers
-│   └── initializers.py  # Weight initialization
+│   ├── initializers.py  # Weight initialization
+│   └── metrics.py       # Evaluation metrics
 ├── optim/               # Optimization algorithms
 │   ├── optimizer.py     # Base optimizer
 │   ├── sgd.py          # SGD with momentum
@@ -584,7 +691,8 @@ neurograd/
 └── utils/               # Utilities
     ├── device.py        # Device management
     ├── grad_check.py    # Gradient verification
-    └── graph.py         # Graph visualization
+    ├── graph.py         # Graph visualization
+    └── data.py          # Dataset and DataLoader classes
 ```
 
 ---
@@ -632,7 +740,10 @@ jupyter notebook comprehensive_framework_test.ipynb
 
 ### 🚀 **Upcoming Features**
 
-- [ ] Convolutional layers (Conv1D, Conv2D)
+- [x] Convolutional layers (Conv2D, MaxPool2D, AveragePool2D) ✅
+- [x] Data utilities (Dataset, DataLoader classes) ✅
+- [x] Evaluation metrics (accuracy, precision, recall, F1, R²) ✅
+- [ ] Convolutional layers (Conv1D)
 - [ ] Recurrent layers (RNN, LSTM, GRU)
 - [ ] Advanced optimizers (AdaGrad, Nadam)
 - [ ] Model serialization/loading
