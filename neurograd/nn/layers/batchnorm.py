@@ -13,15 +13,15 @@ class BatchNorm(Module):
         from neurograd import xp
         # Register scalers params if not already done
         if not hasattr(self, 'mean_scaler'):
-            self.add_parameter(name="mean_scaler", param=ng.zeros((X.shape[1], 1))) # beta
-            self.add_parameter(name="std_scaler", param=ng.ones((X.shape[1], 1))) # gamma
-            self.running_mean = ng.zeros((X.shape[1], 1))
-            self.running_var = ng.ones((X.shape[1], 1))
+            self.add_parameter(name="mean_scaler", param=ng.zeros((1, X.shape[1]))) # beta
+            self.add_parameter(name="std_scaler", param=ng.ones((1, X.shape[1]))) # gamma
+            self.running_mean = ng.zeros((1, X.shape[1]))
+            self.running_var = ng.ones((1, X.shape[1]))
         # Apply BatchNorm if needed
         if self.training:
             # Training mode: compute batch statistics
-            batch_mean = X.mean(axis=1, keepdims=True)
-            batch_var = ((X - batch_mean) ** 2).mean(axis=1, keepdims=True)
+            batch_mean = X.mean(axis=0, keepdims=True)
+            batch_var = ((X - batch_mean) ** 2).mean(axis=0, keepdims=True)
             
             # Update running statistics (detached from computation graph)
             self.running_mean.data = (self.batch_momentum * self.running_mean.data + 
