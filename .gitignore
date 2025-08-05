@@ -145,3 +145,7 @@ Thumbs.db
 experiments/
 results/
 logs/
+
+# Local upload helps
+upload_to_pypi.bat
+upload_to_pypi.sh

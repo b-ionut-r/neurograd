@@ -10,7 +10,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="neurograd",
-    version="0.1.0",
+    version="0.1.4",
     author="Bujor Ionut Raul",
     author_email="b-ionut-r@users.noreply.github.com",
     description="A Pure Python Deep Learning Framework with Automatic Differentiation",
@@ -74,10 +74,6 @@ setup(
             "flake8",
             "mypy",
         ],
-    },
-    include_package_data=True,
-    package_data={
-        "neurograd": ["py.typed"],
     },
     keywords=[
         "deep-learning",

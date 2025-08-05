@@ -173,6 +173,54 @@ class Tensor:
             other = Tensor(xp.array(other), requires_grad=False)
         return other.__matmul__(self)
     
+    def __eq__(self, other) -> 'Tensor':
+        """Element-wise equality comparison."""
+        if isinstance(other, Tensor):
+            result = self.data == other.data
+        else:
+            result = self.data == other
+        return Tensor(result, requires_grad=False, name=f"{self.name}_eq")
+    
+    def __ne__(self, other) -> 'Tensor':
+        """Element-wise not-equal comparison."""
+        if isinstance(other, Tensor):
+            result = self.data != other.data
+        else:
+            result = self.data != other
+        return Tensor(result, requires_grad=False, name=f"{self.name}_ne")
+    
+    def __lt__(self, other) -> 'Tensor':
+        """Element-wise less-than comparison."""
+        if isinstance(other, Tensor):
+            result = self.data < other.data
+        else:
+            result = self.data < other
+        return Tensor(result, requires_grad=False, name=f"{self.name}_lt")
+    
+    def __le__(self, other) -> 'Tensor':
+        """Element-wise less-than-or-equal comparison."""
+        if isinstance(other, Tensor):
+            result = self.data <= other.data
+        else:
+            result = self.data <= other
+        return Tensor(result, requires_grad=False, name=f"{self.name}_le")
+    
+    def __gt__(self, other) -> 'Tensor':
+        """Element-wise greater-than comparison."""
+        if isinstance(other, Tensor):
+            result = self.data > other.data
+        else:
+            result = self.data > other
+        return Tensor(result, requires_grad=False, name=f"{self.name}_gt")
+    
+    def __ge__(self, other) -> 'Tensor':
+        """Element-wise greater-than-or-equal comparison."""
+        if isinstance(other, Tensor):
+            result = self.data >= other.data
+        else:
+            result = self.data >= other
+        return Tensor(result, requires_grad=False, name=f"{self.name}_ge")
+    
     def dot(self, other) -> 'Tensor':
         return self.__matmul__(other)
     
@@ -249,6 +297,10 @@ class Tensor:
     def abs(self) -> 'Tensor':
         from .functions.math import Abs
         return Abs()(self)
+    
+    def clip(self, min_val=None, max_val=None) -> 'Tensor':
+        from .functions.math import Clip
+        return Clip(min_val, max_val)(self)
     
     def relu(self) -> 'Tensor':
         from .functions.activations import ReLU

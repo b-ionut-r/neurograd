@@ -70,6 +70,7 @@ class Conv2D(Module):
 
 
 
+
     def forward(self, X):
         from neurograd import conv2d
         X = X.cast(self.dtype)
