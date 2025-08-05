@@ -15,7 +15,7 @@ class Conv2D(Module):
                 padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                 padding_value: Union[int, float] = 0,
                 weights_initializer = "normal", bias_initializer = "zeros",
-                activation = "relu", dropout = 0.0, 
+                activation = "passthrough", dropout = 0.0, 
                 batch_normalization = False, batch_momentum = 0.9,
                 use_bias = True, dtype = None):
         
