@@ -1,14 +1,12 @@
 import numpy as real_np
 
 def auto_detect_device():
-    """Check if CUDA is available."""
     try:
         import cupy as cp
-        _ = cp.zeros(1)  # Test if cupy can create a tensor
+        _ = cp.zeros(1)  # Will fail if driver is insufficient
         return 'cuda'
-    except ImportError:
+    except Exception:  # Catch more than just ImportError
         return 'cpu'
-
 
 def array_to_numpy(x):
     if isinstance(x, real_np):

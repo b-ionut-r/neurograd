@@ -89,15 +89,44 @@
 
 ### Installation
 
+#### Option 1: Install from PyPI (Recommended)
+
+```bash
+# Install basic version (CPU only)
+pip install neurograd
+
+# Install with GPU support
+pip install neurograd[gpu]
+
+# Install with visualization support
+pip install neurograd[visualization]
+
+# Install with examples and notebooks
+pip install neurograd[notebooks]
+
+# Install everything (GPU, visualization, examples, dev tools)
+pip install neurograd[all]
+```
+
+#### Option 2: Install from Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/b-ionut-r/neurograd.git
 cd neurograd
 
-# Install dependencies
-pip install numpy matplotlib cupy-cuda11x  # For GPU support
-# OR
-pip install numpy matplotlib  # CPU only
+# Install in development mode
+pip install -e .
+
+# Or install with extras
+pip install -e .[all]
+```
+
+#### Verify Installation
+
+```bash
+# Run the installation test
+python test_installation.py
 ```
 
 ### Basic Usage
