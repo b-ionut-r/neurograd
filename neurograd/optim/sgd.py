@@ -2,6 +2,23 @@ from .optimizer import Optimizer
 from typing import Generator, Tuple
 import neurograd as ng
 from neurograd import Tensor, xp
+import numpy as real_numpy
+
+if xp is real_numpy:
+    conditional_fuse = lambda f: f
+else:
+    from cupy import fuse
+    conditional_fuse = fuse
+
+@conditional_fuse()
+def fused_update_momentum(momentum, grad, beta):
+    # momentum = beta * momentum + (1 - beta) * grad
+    return beta * momentum + (1 - beta) * grad
+
+@conditional_fuse()
+def fused_param_update(param, lr, momentum):
+    # param -= lr * momentum
+    return param - lr * momentum
 
 
 class SGD(Optimizer):
@@ -30,16 +47,18 @@ class SGD(Optimizer):
         """
         for i, (name, param) in enumerate(self.params):
             if param.requires_grad and param.grad is not None:
-                # Apply weight decay to gradient
                 grad = param.grad
-                if self.weight_decay != 0:
-                    grad = grad + self.weight_decay * param.data
-                # Update momentum
-                momentum_name, momentum_value = self.momentum[i]
-                updated_momentum = self.beta * momentum_value + (1-self.beta) * grad
-                self.momentum[i] = (momentum_name, updated_momentum)
-                # Update parameters inplace
-                param.data = param.data - self.lr * self.momentum[i][1]
+                momentum_value = self.momentum[i][1]
+                
+                # Weight decay fused with grad (in-place)
+                if self.weight_decay > 0:
+                    xp.add(grad, self.weight_decay * param.data, out=grad)
+                
+                # Fused momentum update
+                momentum_value[:] = fused_update_momentum(momentum_value, grad, self.beta)
+                
+                # Fused parameter update
+                param.data[:] = fused_param_update(param.data, self.lr, momentum_value)
     
     def state_dict(self) -> dict:
         return {

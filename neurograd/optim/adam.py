@@ -2,6 +2,28 @@ from .optimizer import Optimizer
 from typing import Generator, Tuple
 import neurograd as ng
 from neurograd import Tensor, xp
+import numpy as real_numpy
+
+if xp is real_numpy:
+    conditional_fuse = lambda f: f
+else:
+    from cupy import fuse
+    conditional_fuse = fuse
+
+@conditional_fuse()
+def fused_update_momentum(m, grad, beta1):
+    # m = beta1 * m + (1 - beta1) * grad
+    return beta1 * m + (1 - beta1) * grad
+@conditional_fuse()
+def fused_update_variance(v, grad, beta2):
+    # v = beta2 * v + (1 - beta2) * grad^2
+    return beta2 * v + (1 - beta2) * grad * grad
+@conditional_fuse()
+def fused_param_update(param, m, v, lr_corrected, bias2, epsilon):
+    # param -= lr_corrected * m / (sqrt(v / bias2) + epsilon)
+    denom = xp.sqrt(v / bias2) + epsilon
+    return param - lr_corrected * m / denom
+
 
 
 class Adam(Optimizer):
@@ -34,35 +56,29 @@ class Adam(Optimizer):
 
 
     def step(self) -> None:
-        """
-        Performs a single optimization step.
-        """
+        self.t += 1
+        bias1 = 1 - self.beta1 ** self.t
+        bias2 = 1 - self.beta2 ** self.t
+        lr_corrected = self.lr / bias1
+        
         for i, (name, param) in enumerate(self.params):
             if param.requires_grad and param.grad is not None:
-                # Get gradient and apply weight decay
                 grad = param.grad
+                m = self.first_momentum[i][1]
+                v = self.second_momentum[i][1]
+                
+                # Weight decay fused with grad (in-place)
                 if self.weight_decay > 0:
-                    grad = grad + self.weight_decay * param.data
+                    xp.add(grad, self.weight_decay * param.data, out=grad)
                 
-                # Update first moment (momentum)
-                m_name, m_value = self.first_momentum[i]
-                m_value = m_value * self.beta1 + grad * (1 - self.beta1)
-                self.first_momentum[i] = (m_name, m_value)
-                
-                # Update second moment (RMSprop)
-                v_name, v_value = self.second_momentum[i]
-                v_value = v_value * self.beta2 + (grad ** 2) * (1 - self.beta2)
-                self.second_momentum[i] = (v_name, v_value)
-                
-                # Bias correction
-                m_corrected = m_value / (1 - self.beta1 ** self.t)
-                v_corrected = v_value / (1 - self.beta2 ** self.t)
-                
-                # Update parameters in-place
-                param.data = param.data - self.lr * m_corrected / (xp.sqrt(v_corrected) + self.epsilon)
-        self.t += 1
-
+                # Fused momentum update
+                m[:] = fused_update_momentum(m, grad, self.beta1)
+                # Fused variance update
+                v[:] = fused_update_variance(v, grad, self.beta2)
+                # Fused parameter update
+                param.data[:] = fused_param_update(param.data, m, v, lr_corrected, bias2, self.epsilon)
     
+
     def state_dict(self) -> dict:
         return {
             "lr": self.lr,

@@ -149,3 +149,7 @@ logs/
 # Local upload helps
 upload_to_pypi.bat
 upload_to_pypi.sh
+
+# Performance profiling files
+profile.html
+profile.json

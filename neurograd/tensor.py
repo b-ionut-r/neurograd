@@ -10,8 +10,12 @@ class Tensor:
     def __init__(self, data, requires_grad: bool = False,
                  grad_fn: Optional[Callable] = None, name: Optional[str] = None,
                  dtype: Optional[str] = None):
-        
-        self.data = xp.array(data, dtype=dtype)
+        if not isinstance(data, xp.ndarray):
+            self.data = xp.array(data, dtype=dtype)
+        elif dtype is not None:
+            self.data = data.astype(dtype)
+        else:
+            self.data = data
         self.requires_grad = requires_grad # whether to compute gradients for this tensor
         self.grad = None # gradient of this tensor
         self.grad_fn = grad_fn # function that created this tensor

@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 # with axes handling
 class MatMul(Function, Module):
     name = "MatMul"
-    """Matrix multiplication A @ B"""
+    """Matrix multiplication A @ B with support for higher dimensions"""
+    
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -21,20 +22,21 @@ class MatMul(Function, Module):
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
         A, B = self.parent_tensors
         grad_A = grad_B = None
+        def _transpose(arr):
+            """Transpose that works for any ndim >= 1"""
+            if arr.ndim == 1:
+                return arr  # 1D arrays don't transpose
+            elif arr.ndim == 2:
+                return arr.T  # Use .T for 2D for efficiency
+            else:
+                return xp.swapaxes(arr, -2, -1)  # Swap last two axes for higher dims
         if A.requires_grad:
-            # Handle 1D arrays
-            if B.data.ndim == 1:
-                grad_A = xp.outer(grad_output, B.data)
-            else:
-                grad_A = xp.matmul(grad_output, B.data.T)
+            # grad_A = grad_output @ B.T
+            grad_A = xp.matmul(grad_output, _transpose(B.data))
         if B.requires_grad:
-            # Handle 1D arrays
-            if A.data.ndim == 1:
-                grad_B = xp.outer(A.data, grad_output)
-            else:
-                grad_B = xp.matmul(A.data.T, grad_output)
+            # grad_B = A.T @ grad_output  
+            grad_B = xp.matmul(_transpose(A.data), grad_output)
         return grad_A, grad_B
-    
 
 
 class TensorDot(Function, Module):

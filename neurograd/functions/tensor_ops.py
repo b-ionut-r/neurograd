@@ -109,33 +109,47 @@ class Pad(Function, Module):
 
 class SlidingWindowView(Function, Module):
     """
-    Smart Vectorized Sliding Window View with AutoDiff Support 
+    Smart Vectorized Sliding Window View with AutoDiff Support and
+    sliding view buffer to avoid unnecessary memory allocation.
     """
-    def __init__(self, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 
+    def __init__(self, window_shape: Sequence[int],
+                 axes: Union[int, Tuple[int, ...]] = (2, 3),
                  strides: Union[int, Tuple[int, ...]] = (1, 1)):
         Function.__init__(self)
         Module.__init__(self)
-        self.window_shape = window_shape
-        self.axes = axes if isinstance(axes, tuple) else tuple(axes)
+        self.axes = axes if isinstance(axes, tuple) else (axes,)
         self.strides = strides if isinstance(strides, tuple) else \
-                       tuple(strides for _ in range(len(axes)))
-        self.grad_input = None
-        self.grad_input_view = None
+                       tuple(strides for _ in range(len(self.axes)))
+        self.window_shape = window_shape if isinstance(window_shape, tuple) else \
+                           tuple(window_shape for _ in range(len(axes)))
+        self._grad_buffer = None
+        self._grad_view = None
+        
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        from neurograd import xp
-        sliding_window_view = xp.lib.stride_tricks.sliding_window_view
-        # Reset input grad
-        self.grad_input = xp.zeros_like(A)
+        self.input_shape = A.shape
+        # Build slices
         slices = [slice(None)] * A.ndim
         for ax, stride in zip(self.axes, self.strides):
             slices[ax] = slice(None, None, stride)
-        slices = tuple(slices)
-        input_view = sliding_window_view(A, self.window_shape, self.axes)[slices]
-        self.grad_input_view = sliding_window_view(self.grad_input, self.window_shape, self.axes)[slices]
-        return input_view
+        self.slices = tuple(slices)
+        return xp.lib.stride_tricks.sliding_window_view(
+            A, self.window_shape, self.axes)[self.slices]
+    
+    
     def backward(self, grad_output):
-        self.grad_input_view += grad_output
-        return self.grad_input
+        # Reuse gradient buffer if shape matches, otherwise create new
+        if self._grad_buffer is None or self._grad_buffer.shape != self.input_shape:
+            self._grad_buffer = xp.zeros(self.input_shape, dtype=grad_output.dtype)
+            # Cache the view as well
+            self._grad_view = xp.lib.stride_tricks.sliding_window_view(
+                self._grad_buffer, self.window_shape, self.axes)[self.slices]
+        else:
+            # Just zero out the existing buffer - much faster!
+            self._grad_buffer.fill(0)
+        # Accumulate gradients using cached view
+        self._grad_view += grad_output
+        return self._grad_buffer
+
 
 
 def reshape(A, new_shape):
