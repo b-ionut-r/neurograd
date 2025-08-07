@@ -5,7 +5,7 @@ from .dropout import Dropout
 class Linear(Module):
 
     def __init__(self, in_features: int, out_features: int, activation = "passthrough", 
-                 dropout = 0.0, weights_initializer = "normal", bias_initializer = "zeros",
+                 dropout = 0.0, weights_initializer = "xavier", bias_initializer = "zeros",
                  batch_normalization = False, batch_momentum = 0.9,
                  use_bias = True, dtype = None):
         from neurograd import xp
@@ -36,7 +36,7 @@ class Linear(Module):
             init_class = INITIALIZERS.get(init_name, init_name)
             init_params = {"dtype": dtype}
             if init_name == "normal":
-                init_params["scale"] = 0.01
+                init_params["scale"] = 0.02  # Increased for better stability
             elif init_name == "xavier":
                 init_params["n_in"] = in_features
                 init_params["n_out"] = out_features

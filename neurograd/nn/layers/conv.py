@@ -14,7 +14,7 @@ class Conv2D(Module):
                 strides: Union[int, Tuple[int, ...]] = (1, 1),
                 padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                 padding_value: Union[int, float] = 0,
-                weights_initializer = "normal", bias_initializer = "zeros",
+                weights_initializer = "he", bias_initializer = "zeros",
                 activation = "passthrough", dropout = 0.0, 
                 batch_normalization = False, batch_momentum = 0.9,
                 use_bias = True, dtype = None):
@@ -39,7 +39,7 @@ class Conv2D(Module):
             init_class = INITIALIZERS.get(init_name, init_name)
             init_params = {"dtype": dtype}
             if init_name == "normal":
-                init_params["scale"] = 0.01
+                init_params["scale"] = 0.02  # Increased from 0.01 for better stability
             elif init_name == "xavier":
                 init_params["n_in"] = in_channels * self.kernel_size[0] * self.kernel_size[1]
                 init_params["n_out"] = out_channels * self.kernel_size[0] * self.kernel_size[1]

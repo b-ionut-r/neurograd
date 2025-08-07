@@ -40,9 +40,10 @@ class GraphVisualizer:
         visited = set()
         
         def dfs(node):
-            if node in visited:
+            node_id = id(node)
+            if node_id in visited:
                 return
-            visited.add(node)
+            visited.add(node_id)
             
             # Import here to avoid circular imports
             from ..tensor import Tensor

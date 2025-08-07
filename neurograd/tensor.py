@@ -101,7 +101,12 @@ class Tensor:
             
             # Clear intermediate results to save memory (unless retaining graph)
             if not retain_graph:
+                # Clear gradient for intermediate tensors (non-leaf nodes) 
+                # Leaf tensors (weights/biases) keep their gradients for optimizer
+                is_leaf = tensor.grad_fn is None  # Check before clearing grad_fn
                 tensor.grad_fn = None
+                if not is_leaf:  # Only clear grads for intermediate tensors
+                    tensor.grad = None
 
 
     def cast(self, dtype):
@@ -498,6 +503,10 @@ class Tensor:
         """
         from .utils.graph import get_graph_stats
         return get_graph_stats(self)
+    
+    def __hash__(self):
+        """Make tensor hashable using its id."""
+        return hash(id(self))
     
     def __repr__(self):
         """Return a string representation of the tensor."""
