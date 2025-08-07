@@ -126,8 +126,9 @@ class GradScaler:
                     found_inf = True
                     break
                 
-                # Unscale gradient
-                param.grad = param.grad / self._scale
+                # Unscale gradient (avoid division by zero)
+                if self._scale > 0:
+                    param.grad = param.grad / self._scale
         
         self._found_inf = found_inf
     
@@ -165,6 +166,8 @@ class GradScaler:
         if self._found_inf:
             # Overflow detected - reduce scale
             self._scale *= self._backoff_factor
+            # Prevent scale from going too low
+            self._scale = max(self._scale, 1.0)
             self._growth_tracker = 0
             self._found_inf = False
         else:
