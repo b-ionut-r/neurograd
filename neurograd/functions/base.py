@@ -19,6 +19,17 @@ class Function(ABC):
                     processed_inputs.append(Tensor(data, requires_grad=False))
                 except Exception as e:
                     raise TypeError(f"Input {i} must be convertible to numpy array, got {type(inp)}") from e
+        
+        # Apply autocast if enabled (but not for Cast operations to avoid recursion)
+        try:
+            from neurograd.amp.utils import maybe_cast_tensor
+            op_name = getattr(self, 'name', None) or self.__class__.__name__
+            if op_name != 'Cast':  # Avoid recursion with Cast operations
+                processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
+        except ImportError:
+            # AMP not available, continue with original precision
+            pass
+        
         self.parent_tensors = processed_inputs
         output_data = self.forward(*[inp.data for inp in processed_inputs])
         requires_grad = any(inp.requires_grad for inp in processed_inputs)

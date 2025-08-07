@@ -66,6 +66,33 @@ class ExpandDims(Function, Module):
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         return xp.squeeze(grad_output, axis=self.axis) if A.requires_grad else None
+
+class Cast(Function):
+    """
+    Cast tensor to a different dtype while maintaining autograd graph
+    """
+    name = "Cast"
+    
+    def __init__(self, target_dtype):
+        super().__init__()
+        self.target_dtype = target_dtype
+        self.original_dtype = None
+    
+    def forward(self, input_data: xp.ndarray) -> xp.ndarray:
+        """Forward pass: cast data to target dtype"""
+        self.original_dtype = input_data.dtype
+        return input_data.astype(self.target_dtype)
+    
+    def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
+        """Backward pass: cast gradient back to original dtype"""
+        input_tensor = self.parent_tensors[0]
+        
+        if input_tensor.requires_grad:
+            # Cast gradient back to original dtype for consistency
+            grad_input = grad_output.astype(self.original_dtype)
+            return (grad_input,)
+        else:
+            return (None,)
     
 
 class Pad(Function, Module):
@@ -160,6 +187,8 @@ def squeeze(A, axes=None):
     return Squeeze(axes)(A)
 def expand_dims(A, axis):
     return ExpandDims(axis)(A)
+def cast(A, target_dtype):
+    return Cast(target_dtype)(A)
 def pad(A, pad_width, mode='constant', constant_values=0, **kwargs):
     return Pad(pad_width, mode, constant_values, **kwargs)(A)
 def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 

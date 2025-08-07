@@ -10,12 +10,12 @@ else:
     from cupy import fuse
     conditional_fuse = fuse
 
-@conditional_fuse()
+@conditional_fuse
 def fused_update_momentum(momentum, grad, beta):
     # momentum = beta * momentum + (1 - beta) * grad^2
     return beta * momentum + (1 - beta) * grad * grad
 
-@conditional_fuse()
+@conditional_fuse
 def fused_param_update(param, grad, lr, momentum, eps):
     # param -= lr * grad / (sqrt(momentum) + eps)
     denom = xp.sqrt(momentum) + eps
@@ -53,6 +53,12 @@ class RMSprop(Optimizer):
                 grad = param.grad
                 momentum_value = self.momentum[i][1]
                 
+                # Enhanced gradient overflow detection for mixed precision training
+                if not self._is_finite(grad):
+                    # Skip update if gradients are not finite (overflow/underflow)
+                    # This is especially important for mixed precision training
+                    continue
+                
                 # Weight decay fused with grad (in-place)
                 if self.weight_decay > 0:
                     xp.add(grad, self.weight_decay * param.data, out=grad)
@@ -62,6 +68,12 @@ class RMSprop(Optimizer):
                 
                 # Fused parameter update
                 param.data[:] = fused_param_update(param.data, grad, self.lr, momentum_value, self.eps)
+
+    def _is_finite(self, tensor_data):
+        """Check if tensor contains only finite values (no inf/nan)"""
+        if hasattr(tensor_data, 'get'):  # CuPy array
+            tensor_data = tensor_data.get()
+        return real_numpy.isfinite(tensor_data).all()
     
     def state_dict(self) -> dict:
         return {

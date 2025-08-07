@@ -14,6 +14,11 @@ class MSE(Function, Module):
         Module.__init__(self)
     
     def forward(self, y_true: xp.ndarray, y_pred: xp.ndarray) -> xp.ndarray:
+        # Ensure loss computation is done in FP32 for numerical stability in mixed precision
+        if y_true.dtype != xp.float32:
+            y_true = y_true.astype(xp.float32)
+        if y_pred.dtype != xp.float32:
+            y_pred = y_pred.astype(xp.float32)
         return xp.mean((y_true - y_pred) ** 2)
     
     def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray, xp.ndarray]:
@@ -73,6 +78,12 @@ class BinaryCrossEntropy(Function, Module):
         self.epsilon = epsilon
     
     def forward(self, y_true: xp.ndarray, y_pred: xp.ndarray) -> xp.ndarray:
+        # Ensure loss computation is done in FP32 for numerical stability in mixed precision
+        if y_true.dtype != xp.float32:
+            y_true = y_true.astype(xp.float32)
+        if y_pred.dtype != xp.float32:
+            y_pred = y_pred.astype(xp.float32)
+            
         if self.from_logits:
             sigmoid_op = Sigmoid()
             y_pred = sigmoid_op(y_pred).data
@@ -113,6 +124,12 @@ class CategoricalCrossEntropy(Function, Module):
         self.epsilon = epsilon
     
     def forward(self, y_true: xp.ndarray, y_pred: xp.ndarray) -> xp.ndarray:
+        # Ensure loss computation is done in FP32 for numerical stability in mixed precision
+        if y_true.dtype != xp.float32:
+            y_true = y_true.astype(xp.float32)
+        if y_pred.dtype != xp.float32:
+            y_pred = y_pred.astype(xp.float32)
+            
         if self.from_logits:
             softmax_op = Softmax()
             y_pred = softmax_op(y_pred).data

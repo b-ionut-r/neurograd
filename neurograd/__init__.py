@@ -11,10 +11,29 @@ from .functions import (arithmetic, math, linalg, activations, reductions, conv)
 from .functions.arithmetic import add, sub, mul, div, pow
 from .functions.math import log, exp, sin, cos, tan, sqrt, cbrt, log10, log2, abs, clip
 from .functions.linalg import matmul, dot, tensordot, transpose
-from .functions.tensor_ops import reshape, flatten, squeeze, expand_dims, pad, sliding_window_view, newaxis
+from .functions.tensor_ops import reshape, flatten, squeeze, expand_dims, cast, pad, sliding_window_view, newaxis
 from .functions.reductions import Sum, Mean, Max, Min, Std, sum, mean, max, min, std
 from .functions.conv import conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d
 from .tensor import Tensor, ones, zeros, ones_like, zeros_like, empty, arange, eye
+
+# Automatic Mixed Precision (AMP) support
+try:
+    from .amp import autocast, GradScaler
+except ImportError:
+    # Define dummy functions if AMP module not available
+    def autocast(*args, **kwargs):
+        import contextlib
+        return contextlib.nullcontext()
+    
+    class GradScaler:
+        def __init__(self, *args, **kwargs):
+            pass
+        def scale(self, x):
+            return x
+        def step(self, optimizer):
+            optimizer.step()
+        def update(self):
+            pass
 # Optional graph visualization (requires matplotlib)
 try:
     from .utils.graph import visualize_graph, save_graph, print_graph_structure

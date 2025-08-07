@@ -153,3 +153,4 @@ upload_to_pypi.sh
 # Performance profiling files
 profile.html
 profile.json
+_ipython-input-*-profile

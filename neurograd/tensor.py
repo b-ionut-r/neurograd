@@ -106,11 +106,58 @@ class Tensor:
 
     def cast(self, dtype):
         try: 
-            self.data = xp.asarray(self.data, dtype=dtype)
-            self.dtype = dtype
-            return self
+            # Check if already the correct dtype
+            if self.data.dtype == dtype:
+                return self
+            
+            # Use proper autograd casting operation
+            from neurograd.functions.tensor_ops import Cast
+            cast_op = Cast(target_dtype=dtype)
+            return cast_op(self)
         except Exception as e:
             raise TypeError(f"{dtype} isn't a supported data type for the array module: {e}.")
+    
+    def to_half(self):
+        """Convenience method to cast to FP16"""
+        return self.cast(xp.float16)
+    
+    def to_float(self):
+        """Convenience method to cast to FP32"""
+        return self.cast(xp.float32)
+    
+    def is_half(self) -> bool:
+        """Check if tensor is in FP16"""
+        return self.data.dtype == xp.float16
+    
+    def is_float(self) -> bool:
+        """Check if tensor is in FP32"""
+        return self.data.dtype == xp.float32
+    
+    def to_double(self):
+        """Convenience method to cast to FP64"""
+        return self.cast(xp.float64)
+    
+    def is_double(self) -> bool:
+        """Check if tensor is in FP64"""
+        return self.data.dtype == xp.float64
+    
+    def to_dtype(self, dtype):
+        """Convenience method to cast to specified dtype"""
+        if isinstance(dtype, str):
+            dtype = getattr(xp, dtype)
+        return self.cast(dtype)
+    
+    def is_floating_point(self) -> bool:
+        """Check if tensor has floating point dtype"""
+        return self.data.dtype.kind == 'f'
+    
+    def is_integer(self) -> bool:
+        """Check if tensor has integer dtype"""
+        return self.data.dtype.kind in ['i', 'u']
+    
+    def get_dtype(self):
+        """Get the dtype of the tensor"""
+        return self.data.dtype
          
     
     def zero_grad(self):
