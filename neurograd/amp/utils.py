@@ -11,14 +11,15 @@ from .autocast import autocast
 
 # Set of operations that should always stay in FP32 for numerical stability  
 _FP32_OPS: Set[str] = {
-    'exp', 'log', 'sqrt', 'softmax', 'log_softmax', 'layer_norm', 'batch_norm',
-    'cross_entropy', 'mse_loss', 'l1_loss', 'smooth_l1_loss', 'binary_cross_entropy',
+    'exp', 'log', 'sqrt', 'softmax', 'log_softmax', 'layer_norm', 'batchnorm',
+    'batchnorm2d',
+    'cross_entropy', 'mse_loss', 'l1_loss', 'smooth_l1_loss', 'binarycrossentropy',
     'sum', 'mean', 'std', 'var', 'norm', 'categoricalcrossentropy', 'mse', 'cast'
 }
 
 # Set of operations that are safe to run in FP16
 _FP16_SAFE_OPS: Set[str] = {
-    'add', 'sub', 'mul', 'div', 'matmul', 'conv2d', 'relu', 'gelu', 'tanh', 'sigmoid',
+    'add', 'sub', 'mul', 'div', 'dot', 'matmul', 'conv2d', 'relu', 'gelu', 'tanh', 'sigmoid',
     'max', 'min', 'transpose', 'reshape', 'flatten', 'linear'
 }
 
