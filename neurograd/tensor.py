@@ -25,6 +25,7 @@ class Tensor:
             self.name = f"UnnamedTensor_{Tensor.id}"
             Tensor.id += 1
         self.device = 'cpu' if xp is real_np else 'cuda'
+        self.dtype = dtype or self.data.dtype
 
 
     def backward(self, grad = None, retain_graph: bool = False):
