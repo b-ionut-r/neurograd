@@ -15,11 +15,14 @@ def r2_score(y_true: Tensor, y_pred: Tensor):
     y_pred (array-like): Predicted values of the target variable.
 
     Returns:
-    float: The R-squared score, which ranges from 0 to 1. A score of 1 indicates 
-           perfect prediction, while a score of 0 indicates that the model does not 
-           explain any of the variability of the response data around its mean.
+    float: The R-squared score in (-inf, 1]. A score of 1 indicates
+           perfect prediction; values <= 0 indicate poor fit.
     """
-    y_true, y_pred = y_true.data, y_pred.data
+    # Accept Tensor or array-like
+    if isinstance(y_true, Tensor):
+        y_true = y_true.data
+    if isinstance(y_pred, Tensor):
+        y_pred = y_pred.data
     
     # Handle edge case
     if len(y_true) <= 1:
@@ -32,11 +35,11 @@ def r2_score(y_true: Tensor, y_pred: Tensor):
     numerator = xp.sum(xp.square(y_true - y_pred))
     denominator = xp.sum(xp.square(y_true - y_true_mean))
 
-    # Handle the case where the denominator is zero
-    if denominator == 0.0:
-        return 1.0 if numerator == 0.0 else 0.0
+    # Handle the case where the denominator is zero (support CuPy scalars)
+    if float(denominator) == 0.0:
+        return 1.0 if float(numerator) == 0.0 else 0.0
     
-    return 1.0 - numerator / denominator
+    return (1.0 - numerator / denominator).item()
 
 
 def confusion_matrix(y_true: Tensor, y_pred: Tensor, positive_label=None):
@@ -53,7 +56,11 @@ def confusion_matrix(y_true: Tensor, y_pred: Tensor, positive_label=None):
                     [[TN, FP],
                      [FN, TP]]
     """
-    y_true, y_pred = y_true.data, y_pred.data
+    # Accept Tensor or array-like
+    if isinstance(y_true, Tensor):
+        y_true = y_true.data
+    if isinstance(y_pred, Tensor):
+        y_pred = y_pred.data
     
     # Determine positive label if not provided
     if positive_label is None:
@@ -66,7 +73,7 @@ def confusion_matrix(y_true: Tensor, y_pred: Tensor, positive_label=None):
     
     # Validate positive label exists in the data
     all_labels = xp.concatenate([y_true, y_pred])
-    if positive_label not in all_labels:
+    if not xp.any(all_labels == positive_label).item():
         raise ValueError(f"Positive label {positive_label} not found in data.")
     
     # Calculate confusion matrix components
@@ -90,8 +97,17 @@ def _binary_classification_metrics(y_true: Tensor, y_pred: Tensor):
     Returns:
     tuple: (accuracy, precision, recall, f1)
     """
-    y_true, y_pred = y_true.data, y_pred.data
-    unique_labels = xp.unique(y_true)
+    # Accept Tensor or array-like
+    if isinstance(y_true, Tensor):
+        y_true_data = y_true.data
+    else:
+        y_true_data = y_true
+    if isinstance(y_pred, Tensor):
+        y_pred_data = y_pred.data
+    else:
+        y_pred_data = y_pred
+
+    unique_labels = xp.unique(y_true_data)
     if len(unique_labels) != 2:
         raise ValueError("Binary classification requires exactly 2 unique labels.")
     
@@ -99,17 +115,25 @@ def _binary_classification_metrics(y_true: Tensor, y_pred: Tensor):
     positive_label = xp.max(unique_labels)
     
     # Get confusion matrix: [[TN, FP], [FN, TP]]
-    cm = confusion_matrix(y_true, y_pred, positive_label=positive_label)
+    cm = confusion_matrix(y_true_data, y_pred_data, positive_label=positive_label)
     tn, fp, fn, tp = cm.ravel()
     
     # Calculate metrics with safe division
-    total = tp + tn + fp + fn
+    total = (tp + tn + fp + fn).item()
     accuracy = (tp + tn) / total if total > 0 else 0.0
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    
-    return accuracy, precision, recall, f1
+    denom_p = (tp + fp).item()
+    precision = tp / denom_p if denom_p > 0 else 0.0
+    denom_r = (tp + fn).item()
+    recall = tp / denom_r if denom_r > 0 else 0.0
+    pr_sum = (precision + recall)
+    # precision/recall may be xp scalars or floats; handle both safely
+    if hasattr(pr_sum, "item"):
+        pr_sum_val = pr_sum.item()
+    else:
+        pr_sum_val = float(pr_sum)
+    f1 = 2 * precision * recall / pr_sum if pr_sum_val > 0 else 0.0
+
+    return accuracy.item(), precision.item(), recall.item(), f1.item()
 
 
 def _multiclass_classification_metrics(y_true: Tensor, y_pred: Tensor):
@@ -123,23 +147,39 @@ def _multiclass_classification_metrics(y_true: Tensor, y_pred: Tensor):
     Returns:
     tuple: (accuracy, precision, recall, f1)
     """
-    y_true, y_pred = y_true.data, y_pred.data
+    # Accept Tensor or array-like
+    if isinstance(y_true, Tensor):
+        y_true_data = y_true.data
+    else:
+        y_true_data = y_true
+    if isinstance(y_pred, Tensor):
+        y_pred_data = y_pred.data
+    else:
+        y_pred_data = y_pred
+
     # Multiclass accuracy is simply the fraction of correct predictions
-    accuracy = xp.sum(y_true == y_pred) / len(y_true)
+    accuracy = xp.sum(y_true_data == y_pred_data) / len(y_true_data)
     
-    unique_labels = xp.unique(y_true)
+    unique_labels = xp.unique(y_true_data)
     precisions, recalls, f1s = [], [], []
     
     # Compute per-class metrics
     for label in unique_labels:
         # Get confusion matrix for this class vs all others
-        cm = confusion_matrix(y_true, y_pred, positive_label=label)
+        cm = confusion_matrix(y_true_data, y_pred_data, positive_label=label)
         tn, fp, fn, tp = cm.ravel()
         
         # Calculate per-class metrics
-        class_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        class_recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        class_f1 = 2 * class_precision * class_recall / (class_precision + class_recall) if (class_precision + class_recall) > 0 else 0.0
+        denom_p = (tp + fp).item()
+        class_precision = tp / denom_p if denom_p > 0 else 0.0
+        denom_r = (tp + fn).item()
+        class_recall = tp / denom_r if denom_r > 0 else 0.0
+        pr_sum = class_precision + class_recall
+        if hasattr(pr_sum, "item"):
+            pr_sum_val = pr_sum.item()
+        else:
+            pr_sum_val = float(pr_sum)
+        class_f1 = 2 * class_precision * class_recall / pr_sum if pr_sum_val > 0 else 0.0
         
         precisions.append(class_precision)
         recalls.append(class_recall)
@@ -149,8 +189,8 @@ def _multiclass_classification_metrics(y_true: Tensor, y_pred: Tensor):
     precision = xp.mean(precisions)
     recall = xp.mean(recalls)
     f1 = xp.mean(f1s)
-    
-    return accuracy, precision, recall, f1
+
+    return accuracy.item(), precision.item(), recall.item(), f1.item()
 
 
 def compute_classification_metrics(y_true: Tensor, y_pred: Tensor):
@@ -164,12 +204,12 @@ def compute_classification_metrics(y_true: Tensor, y_pred: Tensor):
     Returns:
     tuple: (accuracy, precision, recall, f1) metrics
     """
-    y_true, y_pred = y_true.data, y_pred.data
-    
     if len(y_true) != len(y_pred):
         raise ValueError("y_true and y_pred must have the same length.")
     
-    unique_labels = xp.unique(y_true)
+    # Determine number of classes from true labels
+    true_labels = y_true.data if isinstance(y_true, Tensor) else y_true
+    unique_labels = xp.unique(true_labels)
     
     if len(unique_labels) == 2:
         return _binary_classification_metrics(y_true, y_pred)
@@ -191,12 +231,16 @@ def accuracy_score(y_true: Tensor, y_pred: Tensor):
     Returns:
     float: Accuracy score between 0.0 and 1.0.
     """
-    y_true, y_pred = y_true.data, y_pred.data
+    # Accept Tensor or array-like
+    if isinstance(y_true, Tensor):
+        y_true = y_true.data
+    if isinstance(y_pred, Tensor):
+        y_pred = y_pred.data
     
     if len(y_true) != len(y_pred):
         raise ValueError("y_true and y_pred must have the same length.")
-    
-    return xp.sum(y_true == y_pred) / len(y_true)
+
+    return (xp.sum(y_true == y_pred) / len(y_true)).item()
 
 
 def precision_score(y_true: Tensor, y_pred: Tensor, average='macro'):

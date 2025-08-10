@@ -41,12 +41,12 @@ class Flatten(Function, Module):
 class Squeeze(Function, Module):
     name = "Squeeze"
     """Remove dimensions of size 1 from tensor"""
-    def __init__(self, axes=None):
+    def __init__(self, axis=None):
         Function.__init__(self)
         Module.__init__(self)
-        self.axes = axes
+        self.axis = axis
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        return xp.squeeze(A, axis=self.axes)
+        return xp.squeeze(A, axis=self.axis)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         return grad_output.reshape(A.shape) if A.requires_grad else None
@@ -183,8 +183,8 @@ def reshape(A, new_shape):
     return Reshape(new_shape)(A)
 def flatten(A):
     return Flatten()(A)
-def squeeze(A, axes=None):
-    return Squeeze(axes)(A)
+def squeeze(A, axis=None):
+    return Squeeze(axis)(A)
 def expand_dims(A, axis):
     return ExpandDims(axis)(A)
 def cast(A, target_dtype):
