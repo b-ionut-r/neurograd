@@ -10,7 +10,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="neurograd",
-    version="0.4.5",
+    version="0.4.6",
     author="Bujor Ionut Raul",
     author_email="b-ionut-r@users.noreply.github.com",
     description="A Pure Python Deep Learning Framework with Automatic Differentiation",
@@ -43,7 +43,7 @@ setup(
     python_requires=">=3.7",
     install_requires=requirements,
     extras_require={
-        "gpu": ["cupy-cuda12x>=12.0.0"],
+        "gpu": ["cupy-cuda12x>=13.5.1"],
         "visualization": ["matplotlib>=3.3.0"],
         "examples": [
             "scikit-learn>=0.24.0",
