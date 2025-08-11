@@ -135,8 +135,8 @@ class CategoricalCrossEntropy(Function, Module):
             y_pred = softmax_op(y_pred).data
         
         # Clip predictions to prevent log(0)
-        y_pred_clipped = xp.clip(y_pred, self.epsilon, 1.0)
-        
+        y_pred_clipped = xp.clip(y_pred, self.epsilon, 1.0 - self.epsilon)
+
         return -xp.mean(xp.sum(y_true * xp.log(y_pred_clipped), axis=1))
     
     def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray, xp.ndarray]:

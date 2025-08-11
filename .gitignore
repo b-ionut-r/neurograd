@@ -154,3 +154,7 @@ upload_to_pypi.sh
 profile.html
 profile.json
 _ipython-input-*-profile
+
+# LLMs /init md files
+AGENTS.md
+CLAUDE.md

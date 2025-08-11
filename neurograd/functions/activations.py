@@ -32,7 +32,7 @@ class Sigmoid(Function, Module):
 
 class Softmax(Function, Module):
     name = "Softmax"
-    def __init__(self, axis: int = 0, keepdims: bool = True):
+    def __init__(self, axis: int = -1, keepdims: bool = False):
         Function.__init__(self)
         Module.__init__(self)
         self.axis = axis
