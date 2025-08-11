@@ -97,8 +97,8 @@ def relu(x):
     return ReLU()(x)  
 def sigmoid(x):
     return Sigmoid()(x)   
-def softmax(x , axis: int = 0, keepdims: bool = True):
-        return Softmax(axis = axis, keepdims = keepdims)(x)   
+def softmax(x , axis: int = -1):
+        return Softmax(axis = axis)(x)   
 def tanh(x):
         return Tanh()(x)
 def leaky_relu(x, negative_slope: float = 0.01):
