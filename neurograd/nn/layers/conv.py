@@ -39,7 +39,7 @@ class Conv2D(Module):
             init_class = INITIALIZERS.get(init_name, init_name)
             init_params = {"dtype": dtype}
             if init_name == "normal":
-                init_params["scale"] = 0.02  # Increased from 0.01 for better stability
+                init_params["scale"] = 0.02  # Improved scale for better gradient flow
             elif init_name == "xavier":
                 init_params["n_in"] = in_channels * self.kernel_size[0] * self.kernel_size[1]
                 init_params["n_out"] = out_channels * self.kernel_size[0] * self.kernel_size[1]

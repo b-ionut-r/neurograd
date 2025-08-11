@@ -46,6 +46,35 @@ except ImportError:
     def print_graph_structure(*args, **kwargs):
         print("Graph structure printing requires matplotlib")
 
+
+
 # Importing numpy data types for convenience. This allows users to use float32, int64, etc. directly
 for name in ['float16', 'float32', 'float64', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'bool_']:
     globals()[name] = getattr(xp, name)
+
+
+def save(obj, f, protocol=None):
+    """Serialize with cloudpickle if available."""
+    try:
+        import cloudpickle as _p
+    except Exception:
+        import pickle as _p
+    import pickle as _std
+    protocol = _std.HIGHEST_PROTOCOL if protocol is None else protocol
+    if isinstance(f, (str, bytes)):
+        with open(f, "wb") as fh:
+            _p.dump(obj, fh, protocol=protocol)
+    else:
+        _p.dump(obj, f, protocol=protocol)
+
+
+def load(f):
+    """Deserialize with cloudpickle if available."""
+    try:
+        import cloudpickle as _p
+    except Exception:
+        import pickle as _p
+    if isinstance(f, (str, bytes)):
+        with open(f, "rb") as fh:
+            return _p.load(fh)
+    return _p.load(f)

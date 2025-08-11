@@ -100,3 +100,48 @@ def gradient_check(model: Module, X: Union[Tensor, xp.ndarray], y: Union[Tensor,
     """
     checker = GradientChecker(epsilon=epsilon)
     return checker.check(model, X, y, loss_fn)
+
+
+
+def check_vanishing_grads(model: Module, tol: float = 1e-8):
+    """
+    Inspect existing gradients on `model` and report vanishing/NaN stats.
+    Assumes you've already called backward().
+    Returns a compact dict; no side effects beyond that.
+    """
+    n_params_with_grad = 0
+    tiny, nan_names = [], []
+    total_g2 = 0.0
+
+    for name, p in model.named_parameters():
+        g = getattr(p, "grad", None)
+        if g is None:
+            continue
+        n_params_with_grad += 1
+
+        if xp.isnan(g).any():
+            nan_names.append(name)
+            continue  # skip norm accumulation for NaN grads
+
+        # grad norm
+        try:
+            gnorm = float(xp.linalg.norm(g))
+        except Exception:
+            gnorm = float(xp.sqrt((g * g).sum()))
+
+        if gnorm < tol:
+            tiny.append(name)
+
+        total_g2 += gnorm * gnorm
+
+    total_grad_norm = total_g2 ** 0.5
+
+    return {
+        "n_with_grad": n_params_with_grad,
+        "total_grad_norm": total_grad_norm,
+        "n_vanishing": len(tiny),
+        "vanishing_params": tiny,   # names
+        "n_nan": len(nan_names),
+        "nan_params": nan_names,    # names
+        "threshold": tol,
+    }
