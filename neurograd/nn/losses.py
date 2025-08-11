@@ -137,7 +137,7 @@ class CategoricalCrossEntropy(Function, Module):
         # Clip predictions to prevent log(0)
         y_pred_clipped = xp.clip(y_pred, self.epsilon, 1.0 - self.epsilon)
 
-        return -xp.mean(xp.sum(y_true * xp.log(y_pred_clipped), axis=1))
+        return -xp.mean(xp.sum(y_true * xp.log(y_pred_clipped), axis=-1))
     
     def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray, xp.ndarray]:
         y_true, y_pred = self.parent_tensors

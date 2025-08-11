@@ -30,21 +30,23 @@ class Sigmoid(Function, Module):
         x_grad = grad_output * self.sigmoid_x * (1 - self.sigmoid_x) if x.requires_grad else None
         return x_grad
 
+
 class Softmax(Function, Module):
     name = "Softmax"
-    def __init__(self, axis: int = -1, keepdims: bool = True):
+    def __init__(self, axis: int = -1):
         Function.__init__(self)
         Module.__init__(self)
         self.axis = axis
-        self.keepdims = keepdims
-        self.softmax_x = None
+        self.softmax_x = None  
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        exp_x = xp.exp(x - xp.max(x, axis=self.axis, keepdims=self.keepdims))
-        self.softmax_x = exp_x / xp.sum(exp_x, axis=self.axis, keepdims=self.keepdims)
+        x_max = xp.max(x, axis=self.axis, keepdims=True)
+        exp_x = xp.exp(x - x_max)
+        exp_sum = xp.sum(exp_x, axis=self.axis, keepdims=True)
+        self.softmax_x = exp_x / exp_sum
         return self.softmax_x
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        dot_product = xp.sum(self.softmax_x * grad_output, axis=self.axis, keepdims=self.keepdims)
+        dot_product = xp.sum(self.softmax_x * grad_output, axis=self.axis, keepdims=True)
         x_grad = self.softmax_x * (grad_output - dot_product) if x.requires_grad else None
         return x_grad
 
