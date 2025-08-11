@@ -13,7 +13,7 @@ class Tensor:
         if not isinstance(data, xp.ndarray):
             self.data = xp.array(data, dtype=dtype)
         elif dtype is not None:
-            self.data = data.astype(dtype)
+            self.data = data.astype(dtype, copy=False)
         else:
             self.data = data
         self.requires_grad = requires_grad # whether to compute gradients for this tensor

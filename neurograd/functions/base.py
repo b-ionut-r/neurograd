@@ -22,10 +22,12 @@ class Function(ABC):
         
         # Apply autocast if enabled (but not for Cast operations to avoid recursion)
         try:
-            from neurograd.amp.utils import maybe_cast_tensor
-            op_name = getattr(self, 'name', None) or self.__class__.__name__
-            if op_name != 'Cast':  # Avoid recursion with Cast operations
-                processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
+            from neurograd.amp.autocast import is_autocast_enabled
+            if is_autocast_enabled():
+                from neurograd.amp.utils import maybe_cast_tensor
+                op_name = getattr(self, 'name', None) or self.__class__.__name__
+                if op_name != 'Cast':  # Avoid recursion with Cast operations
+                    processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
         except ImportError:
             # AMP not available, continue with original precision
             pass

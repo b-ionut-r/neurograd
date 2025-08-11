@@ -67,12 +67,6 @@ class Adam(Optimizer):
                 m = self.first_momentum[i][1]
                 v = self.second_momentum[i][1]
                 
-                # Enhanced gradient overflow detection for mixed precision training
-                if not self._is_finite(grad):
-                    # Skip update if gradients are not finite (overflow/underflow)
-                    # This is especially important for mixed precision training
-                    continue
-                
                 # Weight decay fused with grad (in-place)
                 if self.weight_decay > 0:
                     xp.add(grad, self.weight_decay * param.data, out=grad)
@@ -83,12 +77,6 @@ class Adam(Optimizer):
                 v[:] = fused_update_variance(v, grad, self.beta2)
                 # Fused parameter update
                 param.data[:] = fused_param_update(param.data, m, v, lr_corrected, bias2, self.epsilon)
-    
-    def _is_finite(self, tensor_data):
-        """Check if tensor contains only finite values (no inf/nan)"""
-        if hasattr(tensor_data, 'get'):  # CuPy array
-            tensor_data = tensor_data.get()
-        return real_numpy.isfinite(tensor_data).all()
     
 
     def state_dict(self) -> dict:

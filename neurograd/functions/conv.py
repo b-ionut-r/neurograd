@@ -48,6 +48,7 @@ def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarr
         slider.strides = strides
         slider.axes = (2, 3)
     slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)
+    slides = ng.transpose(slides, axes=(0, 2, 3, 1, 4, 5))  # (N, out_H, out_W, C, F_H, F_W)
     slides = ng.reshape(slides, (N * out_H * out_W, C * F_H * F_W))  # (N * out_H * out_W, C * F_H * F_W)
     filters = ng.transpose(ng.reshape(filters, (F_N, C * F_H * F_W)), axes=(1, 0))  # (C * F_H * F_W, F_N)
     output = ng.matmul(slides, filters)  # (N * out_H * out_W, F_N)
