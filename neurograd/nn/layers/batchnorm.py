@@ -13,10 +13,12 @@ class BatchNorm(Module):
         from neurograd import xp
         # Register scalers params if not already done
         if not hasattr(self, 'mean_scaler'):
-            self.add_parameter(name="mean_scaler", param=ng.zeros((1, X.shape[1]), dtype=ng.float32)) # beta
-            self.add_parameter(name="std_scaler", param=ng.ones((1, X.shape[1]), dtype=ng.float32)) # gamma
-            self.running_mean = ng.zeros((1, X.shape[1]), dtype=ng.float32)
-            self.running_var = ng.ones((1, X.shape[1]), dtype=ng.float32)
+            self.add_parameter(name="mean_scaler", param=ng.zeros((1, X.shape[1]), dtype=ng.float32, 
+                                                                  requires_grad=True)) # beta
+            self.add_parameter(name="std_scaler", param=ng.ones((1, X.shape[1]), dtype=ng.float32, 
+                                                                requires_grad=True)) # gamma
+            self.running_mean = ng.zeros((1, X.shape[1]), dtype=ng.float32, requires_grad=False)
+            self.running_var = ng.ones((1, X.shape[1]), dtype=ng.float32, requires_grad=False)
         # Apply BatchNorm if needed
         if self.training:
             # Training mode: compute batch statistics
@@ -72,10 +74,12 @@ class BatchNorm2D(Module):
         
         # Register scalers params if not already done
         if not hasattr(self, 'mean_scaler'):
-            self.add_parameter(name="mean_scaler", param=ng.zeros((1, C, 1, 1), dtype=ng.float32)) # beta
-            self.add_parameter(name="std_scaler", param=ng.ones((1, C, 1, 1), dtype=ng.float32)) # gamma
-            self.running_mean = ng.zeros((1, C, 1, 1), dtype=ng.float32)
-            self.running_var = ng.ones((1, C, 1, 1), dtype=ng.float32)
+            self.add_parameter(name="mean_scaler", param=ng.zeros((1, C, 1, 1), dtype=ng.float32, 
+                                                                  requires_grad=True)) # beta
+            self.add_parameter(name="std_scaler", param=ng.ones((1, C, 1, 1), dtype=ng.float32,
+                                                                 requires_grad=True)) # gamma
+            self.running_mean = ng.zeros((1, C, 1, 1), dtype=ng.float32, requires_grad=False)
+            self.running_var = ng.ones((1, C, 1, 1), dtype=ng.float32, requires_grad=False)
 
         # Apply BatchNorm if needed
         if self.training:

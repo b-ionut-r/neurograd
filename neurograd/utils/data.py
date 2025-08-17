@@ -120,6 +120,19 @@ class ImageFolder(Dataset):
 
     def __len__(self):
         return len(self.images)
+    
+    def _apply_img_transform(self, arr: np.ndarray) -> np.ndarray:
+        if self.img_transform is None:
+            return arr
+        # Try Albumentations-style call
+        try:
+            out = self.img_transform(image=arr)
+            if isinstance(out, dict) and "image" in out:
+                return out["image"]
+        except TypeError:
+            pass
+        # Fallback: plain callable expecting ndarray
+        return self.img_transform(arr)
 
     def _load_image(self, path: str) -> np.ndarray:
         # safer open/close + deterministic convert/resize
@@ -131,12 +144,12 @@ class ImageFolder(Dataset):
             arr = np.array(img)  # uint8 HxWxC or HxW
         if arr.ndim == 2:
             arr = arr[:, :, None]
+        if self.img_transform:
+            arr = self._apply_img_transform(arr)
         if self.chw:
             arr = np.transpose(arr, (2, 0, 1))  # C,H,W
         if self.img_normalize:
             arr = arr.astype(np.float32) / 255.0
-        if self.img_transform:
-            arr = self.img_transform(arr)
         return arr
 
     def __getitem__(self, idx: int):

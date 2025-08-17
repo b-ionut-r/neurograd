@@ -309,7 +309,12 @@ class Tensor:
         """Standard deviation of tensor elements over given axis."""
         from .functions.reductions import Std
         return Std(axis=axis, keepdims=keepdims, ddof=ddof)(self)
-    
+
+    def argmin(self, axis=None) -> 'Tensor':
+        """Indices of minimum values along an axis."""
+        result = xp.argmin(self.data, axis=axis)
+        return Tensor(result, requires_grad=False, name=self.name + "_argmin")
+
     def argmax(self, axis=None) -> 'Tensor':
         """Indices of maximum values along an axis."""
         result = xp.argmax(self.data, axis=axis)
@@ -518,26 +523,35 @@ class Tensor:
         return f"Tensor({self.data})"
 
 
-def zeros(shape: Union[int, List[int]], dtype: Optional[str] = None) -> Tensor:
-    return Tensor(xp.zeros(shape, dtype=dtype), requires_grad=False)
+def zeros(shape: Union[int, List[int]], dtype: Optional[str] = None,
+          requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.zeros(shape, dtype=dtype), requires_grad=requires_grad)
 
-def ones(shape: Union[int, List[int]], dtype: Optional[str] = None) -> Tensor:
-    return Tensor(xp.ones(shape, dtype=dtype), requires_grad=False)
+def ones(shape: Union[int, List[int]], dtype: Optional[str] = None,
+         requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.ones(shape, dtype=dtype), requires_grad=requires_grad)
 
-def zeros_like(tensor: Tensor) -> Tensor:
-    return Tensor(xp.zeros_like(tensor.data, dtype=tensor.data.dtype), requires_grad=False, name=tensor.name + "_zeros_like")
+def zeros_like(tensor: Tensor, requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.zeros_like(tensor.data, dtype=tensor.data.dtype), requires_grad=requires_grad, name=tensor.name + "_zeros_like")
 
-def ones_like(tensor: Tensor) -> Tensor:
-    return Tensor(xp.ones_like(tensor.data, dtype=tensor.data.dtype), requires_grad=False, name=tensor.name + "_ones_like")
+def ones_like(tensor: Tensor, requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.ones_like(tensor.data, dtype=tensor.data.dtype), requires_grad=requires_grad, name=tensor.name + "_ones_like")
 
-def empty(shape: Union[int, List[int]], dtype: Optional[str] = None) -> Tensor:
-    return Tensor(xp.empty(shape, dtype=dtype), requires_grad=False)
+def empty(shape: Union[int, List[int]], dtype: Optional[str] = None,
+          requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.empty(shape, dtype=dtype), requires_grad=requires_grad)
 
-def arange(start: int, stop: int, step: int = 1, dtype: Optional[str] = None) -> Tensor:
-    return Tensor(xp.arange(start, stop, step, dtype=dtype), requires_grad=False)
+def arange(start: int, stop: int, step: int = 1, dtype: Optional[str] = None,
+           requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.arange(start, stop, step, dtype=dtype), requires_grad=requires_grad)
 
-def eye(n: int, dtype: Optional[str] = None) -> Tensor:
-    return Tensor(xp.eye(n, dtype=dtype), requires_grad=False)
+def eye(n: int, dtype: Optional[str] = None,
+        requires_grad: bool = False) -> Tensor:
+    return Tensor(xp.eye(n, dtype=dtype), requires_grad=requires_grad)
+
+def argmin(tensor: Tensor, axis: Optional[int] = None) -> Tensor:
+    """Return indices of minimum values along an axis."""
+    return tensor.argmin(axis=axis)
 
 def argmax(tensor: Tensor, axis: Optional[int] = None) -> Tensor:
     """Return indices of maximum values along an axis."""

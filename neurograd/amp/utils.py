@@ -9,19 +9,36 @@ from typing import Set
 from .autocast import autocast
 
 
-# Set of operations that should always stay in FP32 for numerical stability  
+# Ops that should **always** run in FP32 for numerical stability
 _FP32_OPS: Set[str] = {
-    'exp', 'log', 'sqrt', 'softmax', 'log_softmax', 'layer_norm', 'batchnorm',
-    'batchnorm2d',
-    'cross_entropy', 'mse_loss', 'l1_loss', 'smooth_l1_loss', 'binarycrossentropy',
-    'sum', 'mean', 'std', 'var', 'norm', 'categoricalcrossentropy', 'mse', 'cast'
+    # math with steep/ill-conditioned curves
+    "log", "exp", "sqrt", "cbrt", "log10", "log2",
+    "sin", "cos", "tan",
+    # softmax & reductions that accumulate / are variance-based
+    "softmax",
+    "sum", "mean", "std",
+    # losses (compute entirely in fp32)
+    "mse", "rmse", "mae", "binarycrossentropy", "categoricalcrossentropy",
+    # casting decisions shouldn’t be overridden by autocast
+    "cast",
+    # pow is risky in fp16 except for tiny integer exponents
+    "pow",
 }
 
-# Set of operations that are safe to run in FP16
+# Ops that are **safe** to run in FP16 (or BF16) by default
 _FP16_SAFE_OPS: Set[str] = {
-    'add', 'sub', 'mul', 'div', 'dot', 'matmul', 'conv2d', 'relu', 'gelu', 'tanh', 'sigmoid',
-    'max', 'min', 'transpose', 'reshape', 'flatten', 'linear'
+    # arithmetic
+    "add", "sub", "mul", "div",
+    # linalg (prefer fp32 accumulation inside the kernel)
+    "matmul", "tensordot", "transpose",
+    # tensor reshapes / views
+    "reshape", "flatten", "squeeze", "expanddims", "slidingwindowview",
+    # padding and elementwise
+    "pad", "abs", "clip", "max", "min",
+    # activations (excluding softmax)
+    "relu", "leakyrelu", "sigmoid", "tanh", "passthrough",
 }
+
 
 
 def should_cast_to_fp16(op_name: str) -> bool:
@@ -80,8 +97,7 @@ def maybe_cast_tensor(tensor, target_dtype=None, op_name: str = "unknown") -> 'T
         if should_cast_to_fp16(op_name):
             target_dtype = autocast.get_autocast_dtype()
         else:
-            # Keep in original precision for sensitive ops
-            return tensor
+            return tensor.cast('float32')
     
     # Only cast if different from current dtype
     if tensor.data.dtype == target_dtype:

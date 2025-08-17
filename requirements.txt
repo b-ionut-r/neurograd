@@ -1,4 +1,5 @@
 # Core dependencies
 numpy>=1.19.0
 pillow
+albumentations
 cloudpickle>=2.0.0
