@@ -158,6 +158,7 @@ _ipython-input-*-profile
 # LLMs /init md files
 AGENTS.md
 CLAUDE.md
+.claude/
 
 # Pickle files
 *.pkl

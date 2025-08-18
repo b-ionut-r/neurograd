@@ -5,6 +5,7 @@ import os
 from PIL import Image
 import numpy as np
 from neurograd import xp
+from typing import Optional
 
 class Dataset:
     def __init__(self, X, y, dtype = float32):
@@ -18,10 +19,10 @@ class Dataset:
     def __iter__(self):
         for idx in range(len(self)):
             yield self[idx]
-    def shuffle(self, seed: int = 42):
+    def shuffle(self, seed: Optional[int] = None):
         indices = list(range(len(self)))
-        random.seed(seed)
-        random.shuffle(indices)
+        rng = random.Random(seed) if seed is not None else random.Random()
+        rng.shuffle(indices)
         self.X = self.X[indices]
         self.y = self.y[indices]
     def __repr__(self):
@@ -38,7 +39,7 @@ class Dataset:
 
 class DataLoader:
     def __init__(self, dataset: Dataset, batch_size: int = 32, 
-                 shuffle: bool = True, seed: int = 42):
+                 shuffle: bool = True, seed: Optional[int] = None):
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -55,6 +56,9 @@ class DataLoader:
         return X, y
     def __iter__(self):
         if self.shuffle:
+            # When seed is None, this reshuffles each iteration/epoch deterministically
+            # relative to RNG state but without touching global RNG; with a fixed seed,
+            # order is reproducible across epochs.
             self.dataset.shuffle(self.seed)
         for idx in range(len(self)):
             yield self[idx]
@@ -165,8 +169,8 @@ class ImageFolder(Dataset):
         # Convert to Tensor with dtype specified in init
         return Tensor(image, dtype=self.img_dtype), Tensor(target, dtype=self.target_dtype)
 
-    def shuffle(self, seed: int = 42):
-        rng = random.Random(seed)
+    def shuffle(self, seed: Optional[int] = None):
+        rng = random.Random(seed) if seed is not None else random.Random()
         idxs = list(range(len(self)))
         rng.shuffle(idxs)
         self.images = [self.images[i] for i in idxs]
