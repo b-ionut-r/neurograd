@@ -2,10 +2,12 @@ from neurograd import Tensor, float32
 import math
 import random
 import os
-from PIL import Image
+import cv2
+cv2.setNumThreads(1)
 import numpy as np
 from neurograd import xp
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 class Dataset:
     def __init__(self, X, y, dtype = float32):
@@ -39,33 +41,43 @@ class Dataset:
 
 class DataLoader:
     def __init__(self, dataset: Dataset, batch_size: int = 32, 
-                 shuffle: bool = True, seed: Optional[int] = None):
+                 shuffle: bool = True, seed: Optional[int] = None,
+                 num_workers: Optional[int] = None):
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.seed = seed
+        if num_workers is None:
+            cores = os.cpu_count() or 2
+            self.num_workers = max(1, min(8, cores - 1))
+        else:
+            self.num_workers = int(num_workers)
+        self._executor: Optional[ThreadPoolExecutor] = None
     def __len__(self):
         return math.ceil(len(self.dataset) / self.batch_size)
     def __getitem__(self, idx):
         start = idx * self.batch_size
         end = min((idx + 1) * self.batch_size, len(self.dataset))
-        batch = [self.dataset[i] for i in range(start, end)]  # int indices only
+        if self.num_workers > 0:
+            if self._executor is None:
+                self._executor = ThreadPoolExecutor(max_workers=self.num_workers)
+            futures = [self._executor.submit(self.dataset.__getitem__, i) for i in range(start, end)]
+            batch = [f.result() for f in futures]
+        else:
+            batch = [self.dataset[i] for i in range(start, end)]  # int indices only
         Xs, ys = zip(*batch)
         X = Tensor(xp.stack([x.data for x in Xs], axis=0), dtype=Xs[0].dtype)
         y = Tensor(xp.stack([y.data for y in ys], axis=0), dtype=ys[0].dtype)
         return X, y
     def __iter__(self):
         if self.shuffle:
-            # When seed is None, this reshuffles each iteration/epoch deterministically
-            # relative to RNG state but without touching global RNG; with a fixed seed,
-            # order is reproducible across epochs.
             self.dataset.shuffle(self.seed)
         for idx in range(len(self)):
             yield self[idx]
     def __repr__(self):
         return (f"<DataLoader: {len(self)} batches, "
             f"batch_size={self.batch_size}, "
-            f"shuffle={self.shuffle}, seed={self.seed}>")
+            f"shuffle={self.shuffle}, seed={self.seed}, num_workers={self.num_workers}>")
     def __str__(self):
         return (f"DataLoader:\n"
                 f"  Batches: {len(self)}\n"
@@ -139,13 +151,34 @@ class ImageFolder(Dataset):
         return self.img_transform(arr)
 
     def _load_image(self, path: str) -> np.ndarray:
-        # safer open/close + deterministic convert/resize
-        with Image.open(path) as img:
-            if self.img_mode is not None:
-                img = img.convert(self.img_mode)
-            if self.img_shape is not None:
-                img = img.resize(self.img_shape[::-1], resample=Image.BILINEAR)  # (W,H)
-            arr = np.array(img)  # uint8 HxWxC or HxW
+        # OpenCV-only fast decode/resize
+        mode = (self.img_mode or "RGB").upper()
+        if mode in ("L", "GRAY", "GREY", "GRAYSCALE"):
+            flag = cv2.IMREAD_GRAYSCALE
+        elif mode == "RGBA":
+            flag = cv2.IMREAD_UNCHANGED  # preserve alpha if present
+        else:
+            flag = cv2.IMREAD_COLOR  # BGR
+        # Avoid EXIF orientation work
+        try:
+            flag |= cv2.IMREAD_IGNORE_ORIENTATION
+        except Exception:
+            pass
+
+        arr = cv2.imread(path, flag)
+        if arr is None:
+            raise ValueError(f"Failed to read image: {path}")
+
+        # Convert channel order to match RGB/RGBA expectations
+        if mode == "RGB" and arr.ndim == 3 and arr.shape[2] == 3:
+            arr = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+        elif mode == "RGBA" and arr.ndim == 3 and arr.shape[2] == 4:
+            arr = cv2.cvtColor(arr, cv2.COLOR_BGRA2RGBA)
+
+        # Resize if requested (cv2 expects (W,H))
+        if self.img_shape is not None:
+            h, w = self.img_shape
+            arr = cv2.resize(arr, (int(w), int(h)), interpolation=cv2.INTER_LINEAR)
         if arr.ndim == 2:
             arr = arr[:, :, None]
         if self.img_transform:

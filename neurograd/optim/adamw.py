@@ -11,28 +11,31 @@ else:
     conditional_fuse = fuse
 
 @conditional_fuse
-def fused_adam_step(param, grad, weight_decay, m, v, lr, beta1, beta2, eps, t):
-    grad_eff = grad + weight_decay * param
-    m_new = beta1 * m + (1.0 - beta1) * grad_eff
-    v_new = beta2 * v + (1.0 - beta2) * grad_eff * grad_eff
+def fused_adamw_step(param, grad, weight_decay, m, v, lr, beta1, beta2, eps, t):
+    # AdamW: decoupled weight decay (do not add to grad)
+    # m_t and v_t updates use raw grad
+    m_new = beta1 * m + (1.0 - beta1) * grad
+    v_new = beta2 * v + (1.0 - beta2) * grad * grad
     m_hat = m_new / (1.0 - beta1 ** t)
     v_hat = v_new / (1.0 - beta2 ** t)
-    param_new = param - lr * (m_hat / (xp.sqrt(v_hat) + eps))
+    # Decoupled decay term added directly to parameter update
+    adaptive = m_hat / (xp.sqrt(v_hat) + eps)
+    param_new = param - lr * (adaptive + weight_decay * param)
     return param_new, m_new, v_new
 
 
 
-class Adam(Optimizer):
+class AdamW(Optimizer):
     """
-    Adam optimizer with momentum and adaptive learning rate.
-    This optimizer combines the benefits of AdaGrad and RMSProp, and is well-suited for a wide range of problems.
+    AdamW optimizer with decoupled weight decay.
+    Fused update for speed on GPU (CuPy) and fewer passes on CPU.
     """
 
     def __init__(self, model_parameters: Generator[Tuple[str, Tensor], None, None], lr: float = 0.01,
                  beta1: float = 0.9, beta2: float = 0.999, epsilon: float = 1e-8,
                  weight_decay: float = 0.0) -> None:
         """
-        Initializes the Adam optimizer.
+        Initializes the AdamW optimizer.
 
         Args:
             model_parameters (Generator[Tuple[str, Tensor]]): Named parameters of the model to optimize.
@@ -57,9 +60,11 @@ class Adam(Optimizer):
             if param.requires_grad and param.grad is not None:
                 m = self.first_momentum[i][1]
                 v = self.second_momentum[i][1]
-                # Fused Adam step (weight decay first, momentums updates, bias correction, parameters update)
-                param.data[:], m[:], v[:] = fused_adam_step(param.data, param.grad, self.weight_decay, m, v, self.lr,
-                                                            self.beta1, self.beta2, self.epsilon, self.t)
+                # Fused AdamW step: moments, bias correction, adaptive step, decoupled weight decay
+                param.data[:], m[:], v[:] = fused_adamw_step(
+                    param.data, param.grad, self.weight_decay, m, v, self.lr,
+                    self.beta1, self.beta2, self.epsilon, self.t
+                )
 
     def state_dict(self) -> dict:
         return {
@@ -84,7 +89,7 @@ class Adam(Optimizer):
         self.second_momentum = state_dict["second_momentum"]
 
     def __repr__(self) -> str:
-        return f"Adam(lr={self.lr}, beta1={self.beta1}, beta2={self.beta2}, epsilon={self.epsilon}, weight_decay={self.weight_decay})."
+        return f"AdamW(lr={self.lr}, beta1={self.beta1}, beta2={self.beta2}, epsilon={self.epsilon}, weight_decay={self.weight_decay})."
 
     def __str__(self) -> str:
-        return f"Adam with learning rate {self.lr}, beta1 {self.beta1}, beta2 {self.beta2}, epsilon {self.epsilon}, and weight decay {self.weight_decay}."
+        return f"AdamW with learning rate {self.lr}, beta1 {self.beta1}, beta2 {self.beta2}, epsilon {self.epsilon}, and weight decay {self.weight_decay}."

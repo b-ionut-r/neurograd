@@ -11,14 +11,14 @@ else:
     conditional_fuse = fuse
 
 @conditional_fuse
-def fused_update_momentum(momentum, grad, beta):
-    # momentum = beta * momentum + (1 - beta) * grad
-    return beta * momentum + (1 - beta) * grad
-
-@conditional_fuse
-def fused_param_update(param, lr, momentum):
-    # param -= lr * momentum
-    return param - lr * momentum
+def fused_sgd_step(param, grad, weight_decay, momentum, lr, beta):
+    # grad_eff = grad + weight_decay * param
+    grad_eff = grad + weight_decay * param
+    # momentum_new = beta * momentum + (1 - beta) * grad_eff
+    momentum_new = beta * momentum + (1.0 - beta) * grad_eff
+    # param_new = param - lr * momentum_new
+    param_new = param - lr * momentum_new
+    return param_new, momentum_new
 
 
 class SGD(Optimizer):
@@ -47,25 +47,18 @@ class SGD(Optimizer):
         """
         for i, (name, param) in enumerate(self.params):
             if param.requires_grad and param.grad is not None:
-                grad = param.grad
-                momentum_value = self.momentum[i][1]
-                
-                
-                # Weight decay fused with grad (in-place)
-                if self.weight_decay > 0:
-                    xp.add(grad, self.weight_decay * param.data, out=grad)
-                
-                # Fused momentum update
-                momentum_value[:] = fused_update_momentum(momentum_value, grad, self.beta)
-                
-                # Fused parameter update
-                param.data[:] = fused_param_update(param.data, self.lr, momentum_value)
+                momentum = self.momentum[i][1]
+                # Single fused step (weight decay + momentum + parameter update)
+                param.data[:], momentum[:] = fused_sgd_step(
+                    param.data, param.grad, self.weight_decay, momentum, self.lr, self.beta
+                )
 
 
     def state_dict(self) -> dict:
         return {
             "lr": self.lr,
             "beta": self.beta,
+            "weight_decay": self.weight_decay,
             "params": self.params,
             "momentum": self.momentum,
         }
@@ -73,6 +66,7 @@ class SGD(Optimizer):
     def load_state_dict(self, state_dict: dict) -> None:
         self.lr = state_dict["lr"]
         self.beta = state_dict["beta"]
+        self.weight_decay = state_dict["weight_decay"]
         self.params = state_dict["params"]
         self.momentum = state_dict["momentum"]
     

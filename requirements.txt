@@ -1,5 +1,7 @@
 # Core dependencies
 numpy>=1.19.0
-pillow
 albumentations
 cloudpickle>=2.0.0
+
+# Image I/O (use OpenCV instead of Pillow)
+opencv-python-headless>=4.7.0

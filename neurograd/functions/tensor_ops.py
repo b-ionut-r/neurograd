@@ -134,6 +134,27 @@ class Pad(Function, Module):
 
 
 
+class Clone(Function, Module):
+    """
+    Return a copy of the input tensor that participates in autograd.
+    The backward pass is identity (passes gradients through unchanged).
+    """
+    name = "Clone"
+
+    def __init__(self):
+        Function.__init__(self)
+        Module.__init__(self)
+
+    def forward(self, A: xp.ndarray) -> xp.ndarray:
+        # Ensure data is copied so storage is independent
+        return A.copy()
+
+    def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
+        A = self.parent_tensors[0]
+        if A.requires_grad:
+            return (grad_output,)
+        return (None,)
+
 class SlidingWindowView(Function, Module):
     """
     Smart Vectorized Sliding Window View with AutoDiff Support and
@@ -194,6 +215,8 @@ def pad(A, pad_width, mode='constant', constant_values=0, **kwargs):
 def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 
                         strides: Union[int, Tuple[int, ...]] = (1, 1)):
     return SlidingWindowView(window_shape, axes, strides)(A)
+def clone(A):
+    return Clone()(A)
 
 # newaxis constant for numpy-style indexing
 newaxis = None

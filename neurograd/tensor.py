@@ -445,6 +445,29 @@ class Tensor:
             new_tensor.grad = self.grad.copy()
         return new_tensor
 
+    def detach(self) -> 'Tensor':
+        """
+        Return a new tensor detached from the graph.
+        Shares the same underlying storage (no data copy) but does not
+        require gradients and has no grad_fn.
+        """
+        return Tensor(
+            data=self.data,  # share storage, no copy
+            requires_grad=False,
+            grad_fn=None,
+            name=self.name + "_detached",
+            dtype=self.data.dtype,
+        )
+
+    def clone(self) -> 'Tensor':
+        """
+        Return a copy of the tensor that participates in autograd.
+        If this tensor requires gradients, the clone will too, and
+        gradients will flow back to this tensor through the clone op.
+        """
+        from .functions.tensor_ops import Clone
+        return Clone()(self)
+
     def __getitem__(self, key):
         """Support slicing/indexing like a NumPy array while preserving metadata."""
         sliced_data = self.data[key]
