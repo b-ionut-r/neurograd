@@ -68,7 +68,7 @@ class Adam(Optimizer):
             "beta2": self.beta2,
             "epsilon": self.epsilon,
             "weight_decay": self.weight_decay,
-            "params": self.params,
+            "t": self.t,
             "first_momentum": self.first_momentum,
             "second_momentum": self.second_momentum
         }
@@ -79,9 +79,10 @@ class Adam(Optimizer):
         self.beta2 = state_dict["beta2"]
         self.epsilon = state_dict["epsilon"]
         self.weight_decay = state_dict["weight_decay"]
-        self.params = state_dict["params"]
-        self.first_momentum = state_dict["first_momentum"]
-        self.second_momentum = state_dict["second_momentum"]
+        self.t = state_dict["t"]
+        # Rehydrate moment buffers to current backend (NumPy/CuPy)
+        self.first_momentum = [(n, xp.array(a)) for n, a in state_dict["first_momentum"]]
+        self.second_momentum = [(n, xp.array(a)) for n, a in state_dict["second_momentum"]]
 
     def __repr__(self) -> str:
         return f"Adam(lr={self.lr}, beta1={self.beta1}, beta2={self.beta2}, epsilon={self.epsilon}, weight_decay={self.weight_decay})."

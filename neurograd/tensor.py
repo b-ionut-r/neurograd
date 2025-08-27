@@ -545,7 +545,7 @@ class Tensor:
         """Return a string representation of the tensor."""
         return f"Tensor({self.data})"
 
-
+# NON-DIFF
 def zeros(shape: Union[int, List[int]], dtype: Optional[str] = None,
           requires_grad: bool = False) -> Tensor:
     return Tensor(xp.zeros(shape, dtype=dtype), requires_grad=requires_grad)

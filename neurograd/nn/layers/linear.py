@@ -25,7 +25,7 @@ class Linear(Module):
         
         # Create BatchNorm layer if needed
         if batch_normalization:
-            self.batch_norm = BatchNorm(batch_momentum=batch_momentum)
+            self.batch_norm = BatchNorm(out_features, batch_momentum=batch_momentum)
             
         # Create Dropout layer if needed
         if dropout > 0.0:
@@ -51,7 +51,7 @@ class Linear(Module):
         self.add_parameter(name="weight", param=self.weights_initializer.generate((in_features, out_features)))
         if batch_normalization:
             self.use_bias = False
-        if use_bias:
+        if self.use_bias:
             self.add_parameter(name="bias", param=self.bias_initializer.generate((out_features,)))
 
     def forward(self, X):

@@ -69,7 +69,7 @@ class Conv2D(Module):
         self.add_parameter(name="kernels", param=self.kernels_initializer.generate((out_channels, in_channels, *self.kernel_size)))
         if batch_normalization:
             self.use_bias = False
-        if use_bias:
+        if self.use_bias:
             self.add_parameter(name="bias", param=self.bias_initializer.generate((1, out_channels, 1, 1)))
 
 

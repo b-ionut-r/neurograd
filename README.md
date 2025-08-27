@@ -281,6 +281,27 @@ stats = loss.graph_stats()
 print(f"Nodes: {stats['num_tensors']}, Depth: {stats['max_depth']}")
 ```
 
+### Checkpointing (PyTorch-style)
+
+```python
+import neurograd as ng
+
+# Save checkpoint
+ng.save({
+    'model_state': model.state_dict(),
+    'optimizer_state': optimizer.state_dict(),
+    # optional: 'scaler_state': scaler.state_dict(), 'epoch': epoch
+}, 'checkpoint.pth')
+
+# Or use the convenience helper
+ng.save_checkpoint(model=model, optimizer=optimizer, path='checkpoint.pth', epoch=epoch)
+
+# Load checkpoint later
+ckpt = ng.load('checkpoint.pth')  # or ng.load_checkpoint('checkpoint.pth')
+model.load_state_dict(ckpt['model_state'])
+optimizer.load_state_dict(ckpt['optimizer_state'])
+```
+
 ---
 
 ## 🏗️ Architecture

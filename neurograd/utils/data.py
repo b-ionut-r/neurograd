@@ -39,51 +39,144 @@ class Dataset:
     
 
 
+from collections import deque
 class DataLoader:
-    def __init__(self, dataset: Dataset, batch_size: int = 32, 
+    def __init__(self, dataset: Dataset, batch_size: int = 32,
                  shuffle: bool = True, seed: Optional[int] = None,
-                 num_workers: Optional[int] = None):
+                 num_workers: Optional[int] = None,
+                 prefetch_batches: int = 2,   # <— NEW: how many batches to keep “in flight”
+                 drop_last: bool = False):    # optional
         self.dataset = dataset
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size)
         self.shuffle = shuffle
         self.seed = seed
+        self.prefetch_batches = max(0, int(prefetch_batches))
+        self.drop_last = bool(drop_last)
+
         if num_workers is None:
             cores = os.cpu_count() or 2
             self.num_workers = max(1, min(8, cores - 1))
         else:
             self.num_workers = int(num_workers)
+
         self._executor: Optional[ThreadPoolExecutor] = None
+
     def __len__(self):
-        return math.ceil(len(self.dataset) / self.batch_size)
+        n = len(self.dataset)
+        if self.drop_last:
+            return n // self.batch_size
+        return (n + self.batch_size - 1) // self.batch_size
+
     def __getitem__(self, idx):
-        start = idx * self.batch_size
-        end = min((idx + 1) * self.batch_size, len(self.dataset))
-        if self.num_workers > 0:
-            if self._executor is None:
-                self._executor = ThreadPoolExecutor(max_workers=self.num_workers)
-            futures = [self._executor.submit(self.dataset.__getitem__, i) for i in range(start, end)]
-            batch = [f.result() for f in futures]
+        """Get a specific batch by index. Enables random.choice(dataloader)."""
+        if idx < 0 or idx >= len(self):
+            raise IndexError(f"Batch index {idx} out of range [0, {len(self)})")
+        # Get all batch indices for consistent ordering
+        batches = list(self._batch_indices())
+        batch_idxs = batches[idx]
+        # Load the batch synchronously
+        batch_data = [self.dataset[i] for i in batch_idxs]
+        Xs, ys = zip(*batch_data)
+        # Stack into tensors
+        X = Tensor(xp.stack([x.data for x in Xs], axis=0), dtype=Xs[0].dtype)
+        y = Tensor(xp.stack([y.data for y in ys], axis=0), dtype=ys[0].dtype)
+        return X, y
+
+    # --- helpers -------------------------------------------------------------
+
+    def _ensure_executor(self):
+        if self.num_workers > 0 and self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self.num_workers)
+
+    def _batch_indices(self):
+        n = len(self.dataset)
+        order = list(range(n))
+        if self.shuffle:
+            rng = random.Random(self.seed) if self.seed is not None else random.Random()
+            rng.shuffle(order)
+        if self.drop_last:
+            limit = (n // self.batch_size) * self.batch_size
         else:
-            batch = [self.dataset[i] for i in range(start, end)]  # int indices only
+            limit = n
+        for start in range(0, limit, self.batch_size):
+            end = min(start + self.batch_size, limit)
+            yield order[start:end]
+
+    def _schedule_batch(self, idxs):
+        """
+        Schedule all sample loads in this batch and return the list of futures.
+        Uses the *sample-level* executor; no nested thread pools.
+        """
+        if self.num_workers > 0:
+            self._ensure_executor()
+            return [self._executor.submit(self.dataset.__getitem__, i) for i in idxs]
+        else:
+            # synchronous path for num_workers=0
+            return [(self.dataset[i], None) for i in idxs]  # (result, None) to unify interface
+
+    def _gather_batch(self, futures_or_results):
+        """
+        Block until the batch is ready, then stack into (X, y) Tensors on CPU RAM.
+        """
+        if self.num_workers > 0:
+            batch = [f.result() for f in futures_or_results]
+        else:
+            batch = [r for (r, _) in futures_or_results]
+
         Xs, ys = zip(*batch)
         X = Tensor(xp.stack([x.data for x in Xs], axis=0), dtype=Xs[0].dtype)
         y = Tensor(xp.stack([y.data for y in ys], axis=0), dtype=ys[0].dtype)
         return X, y
+
+    # --- main iteration with batch prefetch ---------------------------------
+
     def __iter__(self):
-        if self.shuffle:
-            self.dataset.shuffle(self.seed)
-        for idx in range(len(self)):
-            yield self[idx]
+        # For deterministic shuffling per epoch, advance/refresh here
+        # (we shuffle via indices in _batch_indices)
+        batches = list(self._batch_indices())
+        window = deque()
+        next_to_submit = 0
+        total = len(batches)
+
+        # Prime the prefetch window
+        pre = self.prefetch_batches if self.prefetch_batches > 0 else 0
+        for _ in range(min(pre, total)):
+            futs = self._schedule_batch(batches[next_to_submit])
+            window.append(futs)
+            next_to_submit += 1
+
+        # Iterate in order; keep the window full
+        for b in range(total):
+            # If window is empty (prefetch=0) or drained, schedule current batch now
+            if not window:
+                futs = self._schedule_batch(batches[next_to_submit])
+                window.append(futs)
+                next_to_submit += 1
+
+            futs = window.popleft()
+
+            # Immediately schedule the next batch to keep the window full
+            if next_to_submit < total and len(window) < self.prefetch_batches:
+                next_futs = self._schedule_batch(batches[next_to_submit])
+                window.append(next_futs)
+                next_to_submit += 1
+
+            # This blocks only if this batch isn’t finished yet
+            X, y = self._gather_batch(futs)
+            yield X, y
+
     def __repr__(self):
         return (f"<DataLoader: {len(self)} batches, "
-            f"batch_size={self.batch_size}, "
-            f"shuffle={self.shuffle}, seed={self.seed}, num_workers={self.num_workers}>")
-    def __str__(self):
-        return (f"DataLoader:\n"
-                f"  Batches: {len(self)}\n"
-                f"  Batch size: {self.batch_size}\n"
-                f"  Shuffle: {self.shuffle}\n"
-                f"  Seed: {self.seed}")
+                f"batch_size={self.batch_size}, "
+                f"shuffle={self.shuffle}, seed={self.seed}, "
+                f"num_workers={self.num_workers}, "
+                f"prefetch_batches={self.prefetch_batches}>")
+
+    # Optional: call when you’re done training to free threads
+    def close(self):
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
 
                      
 

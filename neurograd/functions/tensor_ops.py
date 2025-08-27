@@ -67,6 +67,22 @@ class ExpandDims(Function, Module):
         A = self.parent_tensors[0]
         return xp.squeeze(grad_output, axis=self.axis) if A.requires_grad else None
 
+class Concatenate(Function, Module):
+    name = "Concatenate"
+    def __init__(self, axis):
+        Function.__init__(self)
+        Module.__init__(self)
+        self.axis = axis
+    def forward(self, *inputs: xp.ndarray) -> xp.ndarray:
+        return xp.concatenate(inputs, axis=self.axis)
+    def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray, ...]:
+        inputs = self.parent_tensors
+        split_indices = [tensor.shape[self.axis] for tensor in inputs]
+        split_indices = xp.cumsum(split_indices)[:-1]
+        split_grad = xp.split(grad_output, indices_or_sections=split_indices, axis=self.axis)
+        split_grad = [g if tensor.requires_grad else None for g, tensor in zip(split_grad, inputs)]
+        return tuple(split_grad)
+
 class Cast(Function):
     """
     Cast tensor to a different dtype while maintaining autograd graph
@@ -208,6 +224,8 @@ def squeeze(A, axis=None):
     return Squeeze(axis)(A)
 def expand_dims(A, axis):
     return ExpandDims(axis)(A)
+def concat(tensors: Sequence[Tensor], axis: int) -> Tensor:
+    return Concatenate(axis=axis)(*tensors)
 def cast(A, target_dtype):
     return Cast(target_dtype)(A)
 def pad(A, pad_width, mode='constant', constant_values=0, **kwargs):

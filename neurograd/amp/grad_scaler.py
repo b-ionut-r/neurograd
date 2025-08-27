@@ -12,7 +12,7 @@ class GradScaler:
         init_scale: float = 256.0,
         growth_factor: float = 2.0,
         growth_interval: int = 2000,
-        max_scale: float = 2**20,
+        max_scale: float = 2**16,
         enabled: bool = True,
     ):
         self._enabled = bool(enabled)
@@ -31,6 +31,7 @@ class GradScaler:
 
         self._growth_tracker = 0
         self._has_been_unscaled = False
+        self._found_inf = False
 
     # --- info ---
     def is_enabled(self) -> bool:
@@ -48,15 +49,36 @@ class GradScaler:
 
     # --- core API ---
     def scale(self, tensor) -> "Tensor":
+        # Always perform the scaling multiply in FP32 and outside autocast
+        # to prevent FP16 overflow when the scale grows large.
         if not self._enabled:
             return tensor
         from neurograd.tensor import Tensor
+        try:
+            from neurograd.amp.autocast import autocast as _autocast
+        except Exception:
+            # Fallback: no autocast available
+            _autocast = None
+
         if not isinstance(tensor, Tensor):
             tensor = Tensor(
                 xp.asarray(tensor),
                 requires_grad=getattr(tensor, "requires_grad", False),
             )
-        return tensor * self._scale
+
+        # Ensure the loss tensor is FP32 for numerically safe scaling
+        if tensor.data.dtype != xp.float32:
+            tensor = tensor.cast(xp.float32)
+
+        # Use a FP32 scale value as an array to avoid dtype promotion to FP64
+        scale_arr = xp.array(self._scale, dtype=xp.float32)
+
+        if _autocast is not None:
+            # Disable autocast just for this multiply
+            with _autocast(enabled=False):
+                return tensor * scale_arr
+        else:
+            return tensor * scale_arr
 
     def unscale_(self, optimizer) -> None:
         if not self._enabled or self._has_been_unscaled:
@@ -64,12 +86,20 @@ class GradScaler:
         from neurograd.tensor import Tensor
 
         inv = 1.0 / self._scale if self._scale > 0 else 0.0
+        self._found_inf = False
         for _, param in optimizer.params:
             grad = getattr(param, "grad", None)
             if grad is None or not getattr(param, "requires_grad", False):
                 continue
 
             arr = grad.data if isinstance(grad, Tensor) else grad  # xp.ndarray
+
+            # Fast finite check; bail early on first non-finite
+            try:
+                if not bool(xp.isfinite(arr).all()):
+                    self._found_inf = True
+            except Exception:
+                pass
 
             # in-place when possible; fallback to out-of-place then write back
             try:
@@ -89,6 +119,9 @@ class GradScaler:
             return True
         if not self._has_been_unscaled:
             self.unscale_(optimizer)
+        if self._found_inf:
+            # Skip stepping on overflow; let update() reduce scale
+            return False
         optimizer.step()
         return True
 
@@ -99,13 +132,19 @@ class GradScaler:
             self._scale = float(new_scale)
             self._growth_tracker = 0
         else:
-            self._growth_tracker += 1
-            if self._growth_tracker >= self._growth_interval:
-                self._scale = min(self._scale * self._growth_factor, self._max_scale)
+            if self._found_inf:
+                # Backoff on overflow
+                self._scale = max(self._scale / self._growth_factor, 1.0)
                 self._growth_tracker = 0
+            else:
+                self._growth_tracker += 1
+                if self._growth_tracker >= self._growth_interval:
+                    self._scale = min(self._scale * self._growth_factor, self._max_scale)
+                    self._growth_tracker = 0
 
         # ready for next step
         self._has_been_unscaled = False
+        self._found_inf = False
 
     # --- checkpointing ---
     def state_dict(self) -> Dict[str, Any]:
@@ -116,6 +155,7 @@ class GradScaler:
             "growth_interval": self._growth_interval,
             "max_scale": self._max_scale,
             "enabled": self._enabled,
+            "found_inf": self._found_inf,
         }
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
@@ -126,6 +166,7 @@ class GradScaler:
         self._max_scale = state_dict.get("max_scale", 2**20)
         self._enabled = state_dict["enabled"]
         self._has_been_unscaled = False
+        self._found_inf = state_dict.get("found_inf", False)
 
     def __repr__(self) -> str:
         if not self._enabled:

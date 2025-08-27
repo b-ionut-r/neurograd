@@ -59,7 +59,7 @@ class SGD(Optimizer):
             "lr": self.lr,
             "beta": self.beta,
             "weight_decay": self.weight_decay,
-            "params": self.params,
+            "t": self.t,
             "momentum": self.momentum,
         }
 
@@ -67,8 +67,8 @@ class SGD(Optimizer):
         self.lr = state_dict["lr"]
         self.beta = state_dict["beta"]
         self.weight_decay = state_dict["weight_decay"]
-        self.params = state_dict["params"]
-        self.momentum = state_dict["momentum"]
+        self.t = state_dict["t"]
+        self.momentum = [(n, xp.array(a)) for n, a in state_dict["momentum"]]
     
     def __repr__(self) -> str:
         return f"SGD(lr={self.lr}, beta={self.beta}, weight_decay={self.weight_decay})."

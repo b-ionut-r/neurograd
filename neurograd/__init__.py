@@ -11,7 +11,7 @@ from .functions import (arithmetic, math, linalg, activations, reductions, conv)
 from .functions.arithmetic import add, sub, mul, div, pow
 from .functions.math import log, exp, sin, cos, tan, sqrt, cbrt, log10, log2, abs, clip
 from .functions.linalg import matmul, dot, tensordot, transpose
-from .functions.tensor_ops import reshape, flatten, squeeze, expand_dims, cast, pad, sliding_window_view, newaxis
+from .functions.tensor_ops import reshape, flatten, squeeze, expand_dims, concat, cast, pad, sliding_window_view, newaxis
 from .functions.reductions import Sum, Mean, Max, Min, Std, sum, mean, max, min, std
 from .functions.conv import conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d
 from .tensor import Tensor, ones, zeros, ones_like, zeros_like, empty, arange, eye
@@ -53,19 +53,74 @@ for name in ['float16', 'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
     globals()[name] = getattr(xp, name)
 
 
-def save(obj, f, protocol=None):
-    """Serialize with cloudpickle if available."""
+def save(obj, f, protocol=None, portable: bool = True):
+    """
+    Serialize an object with cloudpickle if available.
+
+    If portable=True, convert CuPy arrays and NeuroGrad Tensors to NumPy first so
+    the checkpoint can be loaded on CPU-only environments without importing CuPy.
+    """
+
+    # Lightweight recursive conversion to NumPy where needed
+    def _to_portable(x):
+        if not portable:
+            return x
+        try:
+            import numpy as _np
+        except Exception:  # pragma: no cover
+            _np = None
+        try:
+            import cupy as _cp  # type: ignore
+        except Exception:
+            _cp = None
+
+        # NeuroGrad Tensor -> NumPy array
+        try:
+            from .tensor import Tensor as _Tensor  # local import to avoid cycles
+            if isinstance(x, _Tensor):
+                return _np.asarray(x.data) if _np is not None else x.data
+        except Exception:
+            pass
+
+        # CuPy array -> NumPy array
+        if _cp is not None:
+            try:
+                if isinstance(x, _cp.ndarray):  # type: ignore[attr-defined]
+                    return _cp.asnumpy(x)
+            except Exception:
+                pass
+
+        # NumPy array -> ensure plain ndarray (no memmaps, etc.)
+        if _np is not None:
+            try:
+                if isinstance(x, _np.ndarray):
+                    return _np.asarray(x)
+            except Exception:
+                pass
+
+        # Containers
+        if isinstance(x, dict):
+            return {k: _to_portable(v) for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            t = type(x)
+            return t(_to_portable(v) for v in x)
+        if isinstance(x, set):
+            return { _to_portable(v) for v in x }
+
+        return x
+
     try:
         import cloudpickle as _p
     except Exception:
         import pickle as _p
     import pickle as _std
     protocol = _std.HIGHEST_PROTOCOL if protocol is None else protocol
+    obj_to_save = _to_portable(obj)
     if isinstance(f, (str, bytes)):
         with open(f, "wb") as fh:
-            _p.dump(obj, fh, protocol=protocol)
+            _p.dump(obj_to_save, fh, protocol=protocol)
     else:
-        _p.dump(obj, f, protocol=protocol)
+        _p.dump(obj_to_save, f, protocol=protocol)
 
 
 def load(f):
@@ -78,3 +133,4 @@ def load(f):
         with open(f, "rb") as fh:
             return _p.load(fh)
     return _p.load(f)
+    
