@@ -83,6 +83,31 @@ class Concatenate(Function, Module):
         split_grad = [g if tensor.requires_grad else None for g, tensor in zip(split_grad, inputs)]
         return tuple(split_grad)
 
+
+class Slice(Function, Module):
+    """
+    Differentiable slice/index operation.
+    Supports basic indexing (slices, ints, None, Ellipsis) and propagates
+    gradients by scattering them back into the input shape.
+    """
+    name = "Slice"
+    def __init__(self, key):
+        Function.__init__(self)
+        Module.__init__(self)
+        self.key = key
+        self.input_shape = None
+    def forward(self, A: xp.ndarray) -> xp.ndarray:
+        self.input_shape = A.shape
+        return A[self.key]
+    def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
+        A = self.parent_tensors[0]
+        if not A.requires_grad:
+            return (None,)
+        grad_input = xp.zeros(self.input_shape, dtype=grad_output.dtype)
+        # Accumulate gradients back to the sliced positions
+        grad_input[self.key] += grad_output
+        return (grad_input,)
+
 class Cast(Function):
     """
     Cast tensor to a different dtype while maintaining autograd graph

@@ -11,7 +11,7 @@ class Tensor:
                  grad_fn: Optional[Callable] = None, name: Optional[str] = None,
                  dtype: Optional[str] = None):
         if not isinstance(data, xp.ndarray):
-            self.data = xp.array(data, dtype=dtype)
+            self.data = xp.array(data, dtype=dtype) if dtype else xp.array(data)
         elif dtype is not None:
             self.data = data.astype(dtype, copy=False)
         else:
@@ -473,9 +473,9 @@ class Tensor:
         return Clone()(self)
 
     def __getitem__(self, key):
-        """Support slicing/indexing like a NumPy array while preserving metadata."""
-        sliced_data = self.data[key]
-        return self._new_tensor_like(sliced_data, name=self.name + f"_slice{key}")
+        """Differentiable slicing/indexing that participates in autograd."""
+        from .functions.tensor_ops import Slice
+        return Slice(key)(self)
 
     def __setitem__(self, key, value):
         """Allow setting values using index."""
@@ -484,18 +484,6 @@ class Tensor:
         else:
             self.data[key] = value
 
-    def _new_tensor_like(self, data, name: Optional[str] = None) -> 'Tensor':
-        """Create a new tensor with the same metadata as this one."""
-        if not name:
-            name = self.name + "_new"
-        return Tensor(
-            data=data,
-            requires_grad=self.requires_grad,
-            grad_fn=self.grad_fn,
-            name=name,
-            dtype=self.data.dtype,
-        )
-    
     def visualize_graph(self, **kwargs):
         """
         Visualize the computational graph that led to this tensor.
