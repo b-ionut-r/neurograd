@@ -30,7 +30,7 @@ _FP16_SAFE_OPS: Set[str] = {
     # arithmetic
     "add", "sub", "mul", "div",
     # linalg (prefer fp32 accumulation inside the kernel)
-    "matmul", "tensordot", "transpose",
+    "matmul", "tensordot", "einsum", "transpose",
     # tensor reshapes / views
     "reshape", "flatten", "squeeze", "expanddims", "slidingwindowview",
     # padding and elementwise

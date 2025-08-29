@@ -49,12 +49,10 @@ class TensorDot(Function, Module):
         Module.__init__(self)
         self.axes = axes
         self.output_shape = None
-
     def forward(self, A: xp.ndarray, B: xp.ndarray) -> xp.ndarray:
         C = xp.tensordot(A, B, axes=self.axes)
         self.output_shape = C.shape
-        return C
-    
+        return C    
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A, B = self.parent_tensors
         # Parse axes consistently
@@ -70,16 +68,14 @@ class TensorDot(Function, Module):
             if isinstance(B_axes, int):
                 B_axes = [B_axes]
         else:
-            raise ValueError(f"Invalid axes format: {self.axes}")  
-        
+            raise ValueError(f"Invalid axes format: {self.axes}")       
         # Convert negative indices to positive
         A_axes = [(ax % A.ndim) for ax in A_axes]
         B_axes = [(ax % B.ndim) for ax in B_axes]
         # Find free (non-contracted) axes
         A_free = [i for i in range(A.ndim) if i not in A_axes]
         B_free = [i for i in range(B.ndim) if i not in B_axes]
-        grad_A = grad_B = None
-    
+        grad_A = grad_B = None   
         if A.requires_grad:
             # Cast incoming grad to B's dtype to prevent upcasting B (often large/strided)
             go = grad_output.astype(B.data.dtype, copy=False)
@@ -90,8 +86,7 @@ class TensorDot(Function, Module):
                 perm[ax] = i
             for i, ax in enumerate(A_axes):
                 perm[ax] = len(A_free) + i
-            grad_A = xp.transpose(grad_A, perm)
-        
+            grad_A = xp.transpose(grad_A, perm)     
         if B.requires_grad:
             # Cast incoming grad to A's dtype to prevent upcasting A
             go = grad_output.astype(A.data.dtype, copy=False)
@@ -102,10 +97,49 @@ class TensorDot(Function, Module):
                 perm[ax] = i
             for i, ax in enumerate(B_free):
                 perm[ax] = len(B_axes) + i
-            grad_B = xp.transpose(grad_B, perm)
-        
+            grad_B = xp.transpose(grad_B, perm) 
         return grad_A, grad_B
     
+class EinSum(Function, Module):
+    name = "EinSum"
+    def __init__(self, subscripts: str):
+        Function.__init__(self)
+        Module.__init__(self)
+        self.subscripts = subscripts.replace(" ", "")  
+    def forward(self, *operands: xp.ndarray) -> xp.ndarray:
+        self.operand_shapes = [op.shape for op in operands]
+        return xp.einsum(self.subscripts, *operands)
+    def backward(self, grad_output: xp.ndarray):
+        parent_tensors = self.parent_tensors
+        grads = []
+        if '->' in self.subscripts:
+            inputs_str, output_str = self.subscripts.split('->')
+            input_specs = inputs_str.split(',')
+        else:
+            raise NotImplementedError("Implicit einsum mode not supported")
+        for i, tensor in enumerate(parent_tensors):
+            if not tensor.requires_grad:
+                grads.append(None)
+                continue    
+            grad_operands = [grad_output]
+            grad_specs = [output_str]          
+            for j, operand in enumerate(parent_tensors):
+                if j != i:
+                    grad_operands.append(operand.data)
+                    grad_specs.append(input_specs[j])        
+            grad_equation = ','.join(grad_specs) + '->' + input_specs[i]
+            grad = xp.einsum(grad_equation, *grad_operands)
+            grad = self._reduce_for_broadcast(grad, self.operand_shapes[i])
+            grads.append(grad)  
+        return tuple(grads)
+    def _reduce_for_broadcast(self, grad, original_shape):
+        while len(grad.shape) > len(original_shape):
+            grad = grad.sum(axis=0)
+        
+        for i in range(len(original_shape)):
+            if original_shape[i] == 1 and grad.shape[i] > 1:
+                grad = grad.sum(axis=i, keepdims=True)
+        return grad
 
 class Transpose(Function, Module):
     name = "Transpose"
@@ -136,5 +170,7 @@ def dot(A, B):
     return MatMul()(A, B)
 def tensordot(A, B, axes):
     return TensorDot(axes)(A, B)
+def einsum(subscripts: str, *operands: xp.ndarray) -> xp.ndarray:
+    return EinSum(subscripts)(*operands)
 def transpose(A, axes=None):
     return Transpose(axes)(A)
