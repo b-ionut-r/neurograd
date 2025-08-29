@@ -58,7 +58,7 @@ class Linear(Module):
         import neurograd as ng
         from neurograd import xp
         # X will be of shape (batch_size, in_features)
-        X = X.cast(self.dtype)
+        X = X.cast(self.dtype) if self.dtype else X
         Z = ng.matmul(X, self.weight)
         if self.use_bias:
             Z += self.bias

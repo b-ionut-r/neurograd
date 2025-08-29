@@ -21,7 +21,7 @@ elif DEVICE == "cuda":
                 check=True
             )
     # Set accelerators
-    os.environ["CUPY_ACCELERATORS"] = "cutensor"  # or "cub,cutensor" if you want both
+    os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
     import cupy as xp
 
 # from .utils.device import auto_detect_device

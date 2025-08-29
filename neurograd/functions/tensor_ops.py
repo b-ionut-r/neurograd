@@ -97,7 +97,7 @@ class Cast(Function):
     def forward(self, input_data: xp.ndarray) -> xp.ndarray:
         """Forward pass: cast data to target dtype"""
         self.original_dtype = input_data.dtype
-        return input_data.astype(self.target_dtype)
+        return input_data.astype(self.target_dtype, copy=False)
     
     def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
         """Backward pass: cast gradient back to original dtype"""
@@ -105,7 +105,7 @@ class Cast(Function):
         
         if input_tensor.requires_grad:
             # Cast gradient back to original dtype for consistency
-            grad_input = grad_output.astype(self.original_dtype)
+            grad_input = grad_output.astype(self.original_dtype, copy=False)
             return (grad_input,)
         else:
             return (None,)

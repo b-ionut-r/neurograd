@@ -84,7 +84,7 @@ class Conv2D(Module):
 
     def forward(self, X):
         from neurograd import conv2d
-        X = X.cast(self.dtype)
+        X = X.cast(self.dtype) if self.dtype else X
         Z = conv2d(X, self.kernels, self.strides, self.padding, self.padding_value, 
                    depthwise=self.depthwise, slider=self.slider)
         if self.use_bias:
@@ -121,7 +121,7 @@ class MaxPool2D(Module):
 
     def forward(self, X):
         from neurograd import maxpool2d
-        X = X.cast(self.dtype)
+        X = X.cast(self.dtype) if self.dtype else X
         Z = maxpool2d(X, self.pool_size, self.strides, self.padding, self.padding_value, slider=self.slider)  
         return Z
 
@@ -147,7 +147,7 @@ class AveragePool2D(Module):
 
     def forward(self, X):
         from neurograd import averagepool2d
-        X = X.cast(self.dtype)
+        X = X.cast(self.dtype) if self.dtype else X
         Z = averagepool2d(X, self.pool_size, self.strides, self.padding, self.padding_value, slider=self.slider)  
         return Z
 
