@@ -20,7 +20,6 @@ class Linear(Module):
         self.batch_normalization = batch_normalization
         self.batch_momentum = batch_momentum
         self.use_bias = use_bias
-        dtype = dtype if dtype is not None else ng.float32
         self.dtype = dtype
         
         # Create BatchNorm layer if needed
@@ -34,7 +33,7 @@ class Linear(Module):
         # Helper function to instantiate initializers
         def get_initializer(init_name):
             init_class = INITIALIZERS.get(init_name, init_name)
-            init_params = {"dtype": dtype}
+            init_params = {"dtype": ng.float32}
             if init_name == "normal":
                 init_params["scale"] = 0.01  # Improved scale for better gradient flow
             elif init_name == "xavier":

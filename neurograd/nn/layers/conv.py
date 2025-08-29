@@ -40,10 +40,9 @@ class Conv2D(Module):
         self.padding_value = padding_value
         self.depthwise = depthwise
         
-        dtype = dtype if dtype is not None else ng.float32
         def get_initializer(init_name):
             init_class = INITIALIZERS.get(init_name, init_name)
-            init_params = {"dtype": dtype}
+            init_params = {"dtype": ng.float32}
             if init_name == "normal":
                 init_params["scale"] = 0.02  # Improved scale for better gradient flow
             elif init_name == "xavier":
