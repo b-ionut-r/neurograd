@@ -224,7 +224,7 @@ def squeeze(A, axis=None):
     return Squeeze(axis)(A)
 def expand_dims(A, axis):
     return ExpandDims(axis)(A)
-def concat(tensors: Sequence[Tensor], axis: int) -> Tensor:
+def concat(tensors: Sequence["Tensor"], axis: int) -> "Tensor":
     return Concatenate(axis=axis)(*tensors)
 def cast(A, target_dtype):
     return Cast(target_dtype)(A)

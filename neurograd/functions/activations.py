@@ -16,6 +16,25 @@ class ReLU(Function, Module):
         x_grad = grad_output * (x.data > 0) if x.requires_grad else None
         return x_grad
 
+
+class ReLU6(Function, Module):
+    name = "ReLU6"
+    def __init__(self):
+        Function.__init__(self)
+        Module.__init__(self)
+    def forward(self, x: xp.ndarray) -> xp.ndarray:
+        output = xp.empty_like(x)
+        xp.clip(x, 0, 6, out=output)
+        return output
+    def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
+        x = self.parent_tensors[0]
+        if x.requires_grad:
+            mask = (x.data > 0) & (x.data < 6)
+            x_grad = grad_output * mask
+        else:
+            x_grad = None
+        return x_grad
+
 class Sigmoid(Function, Module):
     name = "Sigmoid"
     def __init__(self):
@@ -95,6 +114,8 @@ class Passthrough(Function, Module):
 # These functions are designed to be used directly with tensors, providing a more intuitive interface.
 def relu(x):
     return ReLU()(x)  
+def relu6(x):
+    return ReLU6()(x)
 def sigmoid(x):
     return Sigmoid()(x)   
 def softmax(x , axis: int = -1):

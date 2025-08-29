@@ -163,3 +163,6 @@ CLAUDE.md
 # Pickle files
 *.pkl
 *.pickle
+
+# WSL env
+cupy_env/

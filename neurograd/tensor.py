@@ -368,6 +368,10 @@ class Tensor:
         from .functions.activations import ReLU
         return ReLU()(self)
     
+    def relu6(self) -> 'Tensor':
+        from .functions.activations import ReLU6
+        return ReLU6()(self)
+    
     def sigmoid(self) -> 'Tensor':
         from .functions.activations import Sigmoid
         return Sigmoid()(self)

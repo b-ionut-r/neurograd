@@ -31,11 +31,13 @@ class MatMul(Function, Module):
             else:
                 return xp.swapaxes(arr, -2, -1)  # Swap last two axes for higher dims
         if A.requires_grad:
-            # grad_A = grad_output @ B.T
-            grad_A = xp.matmul(grad_output, _transpose(B.data))
+            # Match grad dtype to operand to avoid upcasting large tensors
+            go = grad_output.astype(B.data.dtype, copy=False)
+            grad_A = xp.matmul(go, _transpose(B.data))
         if B.requires_grad:
-            # grad_B = A.T @ grad_output  
-            grad_B = xp.matmul(_transpose(A.data), grad_output)
+            # Match grad dtype to operand to avoid upcasting large tensors
+            go = grad_output.astype(A.data.dtype, copy=False)
+            grad_B = xp.matmul(_transpose(A.data), go)
         return grad_A, grad_B
 
 
@@ -47,42 +49,63 @@ class TensorDot(Function, Module):
         Module.__init__(self)
         self.axes = axes
         self.output_shape = None
+
     def forward(self, A: xp.ndarray, B: xp.ndarray) -> xp.ndarray:
         C = xp.tensordot(A, B, axes=self.axes)
         self.output_shape = C.shape
         return C
+    
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A, B = self.parent_tensors
+        # Parse axes consistently
         if isinstance(self.axes, int):
-            # When axes is an int n, contract last n axes of a with first n axes of b
+            # Contract last n axes of A with first n axes of B
             A_axes = list(range(A.ndim - self.axes, A.ndim))
             B_axes = list(range(self.axes))
         elif isinstance(self.axes, (list, tuple)) and len(self.axes) == 2:
             A_axes, B_axes = self.axes
+            # Ensure they're lists for consistency
+            if isinstance(A_axes, int):
+                A_axes = [A_axes]
+            if isinstance(B_axes, int):
+                B_axes = [B_axes]
         else:
-            # Single axis case
-            A_axes = [self.axes] if isinstance(self.axes, int) else self.axes
-            B_axes = [self.axes] if isinstance(self.axes, int) else self.axes
-        A_free_axes = [ax for ax in range(A.ndim) if ax not in A_axes]
-        B_free_axes = [ax for ax in range(B.ndim) if ax not in B_axes]
-        output_ndim = A.ndim + B.ndim - len(A_axes) - len(B_axes)
+            raise ValueError(f"Invalid axes format: {self.axes}")  
+        
+        # Convert negative indices to positive
+        A_axes = [(ax % A.ndim) for ax in A_axes]
+        B_axes = [(ax % B.ndim) for ax in B_axes]
+        # Find free (non-contracted) axes
+        A_free = [i for i in range(A.ndim) if i not in A_axes]
+        B_free = [i for i in range(B.ndim) if i not in B_axes]
         grad_A = grad_B = None
+    
         if A.requires_grad:
-            grad_A = xp.tensordot(grad_output, B.data, 
-                                  axes=[list(range(output_ndim))[-len(B_free_axes):], B_free_axes])
-            order = A_axes + [ax for ax in range(A.ndim) if ax not in A_axes]
-            inverse_perm = [0] * A.ndim
-            for i, ax in enumerate(order): inverse_perm[ax] = i
-            grad_A = xp.transpose(grad_A, inverse_perm)
+            # Cast incoming grad to B's dtype to prevent upcasting B (often large/strided)
+            go = grad_output.astype(B.data.dtype, copy=False)
+            grad_A = xp.tensordot(go, B.data,
+                                axes=[list(range(len(A_free), len(A_free) + len(B_free))), B_free])
+            perm = [0] * A.ndim
+            for i, ax in enumerate(A_free):
+                perm[ax] = i
+            for i, ax in enumerate(A_axes):
+                perm[ax] = len(A_free) + i
+            grad_A = xp.transpose(grad_A, perm)
+        
         if B.requires_grad:
-            grad_B = xp.tensordot(A.data, grad_output,
-                                  axes=[A_free_axes, list(range(output_ndim))[:len(A_free_axes)]])
-            order = B_axes + [ax for ax in range(B.ndim) if ax not in B_axes]
-            inverse_perm = [0] * B.ndim
-            for i, ax in enumerate(order): inverse_perm[ax] = i
-            grad_B = xp.transpose(grad_B, inverse_perm)
+            # Cast incoming grad to A's dtype to prevent upcasting A
+            go = grad_output.astype(A.data.dtype, copy=False)
+            grad_B = xp.tensordot(A.data, go,
+                                axes=[A_free, list(range(len(A_free)))])
+            perm = [0] * B.ndim
+            for i, ax in enumerate(B_axes):
+                perm[ax] = i
+            for i, ax in enumerate(B_free):
+                perm[ax] = len(B_axes) + i
+            grad_B = xp.transpose(grad_B, perm)
+        
         return grad_A, grad_B
-
+    
 
 class Transpose(Function, Module):
     name = "Transpose"

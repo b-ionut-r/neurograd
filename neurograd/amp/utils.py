@@ -4,7 +4,7 @@ Utility functions for automatic mixed precision
 This module contains utility functions used by the AMP system for
 determining precision, casting tensors, and managing operation types.
 """
-
+import neurograd as ng
 from typing import Set
 from .autocast import autocast
 
@@ -36,7 +36,7 @@ _FP16_SAFE_OPS: Set[str] = {
     # padding and elementwise
     "pad", "abs", "clip", "max", "min",
     # activations (excluding softmax)
-    "relu", "leakyrelu", "sigmoid", "tanh", "passthrough",
+    "relu", "relu6", "leakyrelu", "sigmoid", "tanh", "passthrough",
 }
 
 
@@ -97,7 +97,7 @@ def maybe_cast_tensor(tensor, target_dtype=None, op_name: str = "unknown") -> 'T
         if should_cast_to_fp16(op_name):
             target_dtype = autocast.get_autocast_dtype()
         else:
-            return tensor.cast('float32')
+            return tensor.cast(ng.float32)
     
     # Only cast if different from current dtype
     if tensor.data.dtype == target_dtype:

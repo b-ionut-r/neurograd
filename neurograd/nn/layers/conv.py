@@ -9,15 +9,20 @@ class Conv2D(Module):
 
     def __init__(self, 
                 in_channels: int,
-                out_channels: int,
+                out_channels: int = None,
                 kernel_size: Union[int, Tuple[int, ...]] = (3, 3),
                 strides: Union[int, Tuple[int, ...]] = (1, 1),
                 padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                 padding_value: Union[int, float] = 0,
+                depthwise: bool = False,
                 weights_initializer = "he", bias_initializer = "zeros",
                 activation = "passthrough", dropout = 0.0, 
                 batch_normalization = False, batch_momentum = 0.9,
                 use_bias = True, dtype = None):
+        
+        if not out_channels and not depthwise:
+            raise ValueError("`out_channels` must be specified for standard convolution.")
+        out_channels = in_channels if depthwise else out_channels
         
         import neurograd as ng     
         from neurograd.utils.aliases import ACTIVATIONS, INITIALIZERS
@@ -33,6 +38,7 @@ class Conv2D(Module):
         else:
             self.padding = padding if isinstance(padding, tuple) else (padding, padding)
         self.padding_value = padding_value
+        self.depthwise = depthwise
         
         dtype = dtype if dtype is not None else ng.float32
         def get_initializer(init_name):
@@ -66,7 +72,8 @@ class Conv2D(Module):
         if dropout > 0.0:
             self.dropout_layer = Dropout2D(dropout)
         # Add parameters
-        self.add_parameter(name="kernels", param=self.kernels_initializer.generate((out_channels, in_channels, *self.kernel_size)))
+        kernels_shape = (out_channels, in_channels, *self.kernel_size) if not depthwise else (out_channels, *self.kernel_size)
+        self.add_parameter(name="kernels", param=self.kernels_initializer.generate(kernels_shape))
         if batch_normalization:
             self.use_bias = False
         if self.use_bias:
@@ -78,7 +85,8 @@ class Conv2D(Module):
     def forward(self, X):
         from neurograd import conv2d
         X = X.cast(self.dtype)
-        Z = conv2d(X, self.kernels, self.strides, self.padding, self.padding_value, slider=self.slider)
+        Z = conv2d(X, self.kernels, self.strides, self.padding, self.padding_value, 
+                   depthwise=self.depthwise, slider=self.slider)
         if self.use_bias:
             Z += self.bias
         # Apply BatchNorm if needed
@@ -145,3 +153,5 @@ class AveragePool2D(Module):
 
 MaxPooling2D = MaxPool2D
 AveragePooling2D = AveragePool2D
+
+

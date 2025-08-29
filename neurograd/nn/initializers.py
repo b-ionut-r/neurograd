@@ -44,4 +44,3 @@ class Zeros:
         shape = inputs[0] if isinstance(inputs[0], tuple) else tuple(inputs)
         data = xp.zeros(shape)
         return Tensor(data = data, dtype = self.dtype, requires_grad=True)
-    
