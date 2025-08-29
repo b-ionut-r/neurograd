@@ -62,18 +62,12 @@ def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarr
         slider.axes = (2, 3)
     if not depthwise:
         slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)
-        slides = ng.transpose(slides, axes=(0, 2, 3, 1, 4, 5))  # (N, out_H, out_W, C, F_H, F_W)
-        slides = ng.reshape(slides, (N * out_H * out_W, C * F_H * F_W))  # (N * out_H * out_W, C * F_H * F_W)
-        filters = ng.transpose(ng.reshape(filters, (F_N, C * F_H * F_W)), axes=(1, 0))  # (C * F_H * F_W, F_N)
-        output = ng.matmul(slides, filters)  # (N * out_H * out_W, F_N)
-        output = ng.transpose(ng.reshape(output, (N, out_H, out_W, F_N)), axes=(0, 3, 1, 2))  # (N, F_N, out_H, out_W)
+        filters = filters # (F_N, C, F_H, F_W)
+        output = ng.einsum("ncpqhw,fchw->nfpq", slides, filters) # (N, F_N, out_H, out_W) 
     else:
-        slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)     # (C, F_H, F_W)
-        slides = ng.transpose(slides, axes=(0, 2, 3, 1, 4, 5))  # (N, out_H, out_W, C, F_H, F_W)
-        slides = ng.reshape(slides, (N * out_H * out_W, C, F_H * F_W))  # (N * out_H * out_W, C, F_H * F_W)
-        filters = ng.expand_dims(ng.reshape(filters, (C, F_H * F_W)), axis=0) # (1, C, F_H * F_W)
-        output = ng.sum(slides * filters, axis=2) # (N * out_H * out_W, C)
-        output = ng.transpose(ng.reshape(output, (N, out_H, out_W, C)), axes=(0, 3, 1, 2))  # (N, C, out_H, out_W)
+        slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)
+        filters = filters # (C, F_H, F_W)
+        output = ng.einsum('ncpqhw,chw->ncpq', slides, filters)
 
     return output
 
@@ -152,7 +146,7 @@ def maxpool2d(input: Union["Tensor", xp.ndarray],
 
 def averagepool2d(input: Union["Tensor", xp.ndarray], 
                   pool_size: Union[int, Tuple[int, ...]],
-                  strides: Union[int, Tuple[int, ...]] = (1, 1),
+                  strides: Union[int, Tuple[int, ...]] = (2, 2),
                   padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                   padding_value: Union[int, float] = 0, slider=None):
     import neurograd as ng
@@ -163,3 +157,5 @@ def averagepool2d(input: Union["Tensor", xp.ndarray],
 pooling2d = pool2d
 maxpooling2d = maxpool2d
 averagepooling2d = averagepool2d
+
+

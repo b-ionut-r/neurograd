@@ -1,35 +1,34 @@
-# Device detection and numpy/cupy setup must happen first to avoid circular imports
-from .utils.device import auto_detect_device
-DEVICE = auto_detect_device()
-if DEVICE == "cpu":
-    import numpy as xp
-elif DEVICE == "cuda":
-    import os, sys, subprocess, pathlib
-    # Remove CuPy if already imported
-    for mod in list(sys.modules.keys()):
-        if mod.startswith("cupy"):
-            del sys.modules[mod]
-    # Install extras
-    base = pathlib.Path.home() / ".cupy" / "cuda_lib" / "12.x"
-    libs = {"cutensor": "cutensor", "cudnn": "cudnn"}
-    for lib, dirname in libs.items():
-        target = base / dirname
-        if not target.exists():
-            subprocess.run(
-                [sys.executable, "-m", "cupyx.tools.install_library",
-                 "--library", lib, "--cuda", "12.x"],
-                check=True
-            )
-    # Set accelerators
-    os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
-    import cupy as xp
-
 # from .utils.device import auto_detect_device
 # DEVICE = auto_detect_device()
 # if DEVICE == "cpu":
 #     import numpy as xp
 # elif DEVICE == "cuda":
+#     import os, sys, subprocess, pathlib
+#     # Remove CuPy if already imported
+#     for mod in list(sys.modules.keys()):
+#         if mod.startswith("cupy"):
+#             del sys.modules[mod]
+#     # Install extras
+#     base = pathlib.Path.home() / ".cupy" / "cuda_lib" / "12.x"
+#     libs = {"cutensor": "cutensor", "cudnn": "cudnn"}
+#     for lib, dirname in libs.items():
+#         target = base / dirname
+#         if not target.exists():
+#             subprocess.run(
+#                 [sys.executable, "-m", "cupyx.tools.install_library",
+#                  "--library", lib, "--cuda", "12.x"],
+#                 check=True
+#             )
+#     # Set accelerators
+#     os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
 #     import cupy as xp
+
+from .utils.device import auto_detect_device
+DEVICE = auto_detect_device()
+if DEVICE == "cpu":
+    import numpy as xp
+elif DEVICE == "cuda":
+    import cupy as xp
 
 # Now import everything else after xp is available
 from .functions import (arithmetic, math, linalg, activations, reductions, conv)
