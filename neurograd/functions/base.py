@@ -2,6 +2,14 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple
 from neurograd.tensor import Tensor
 from neurograd import xp
+try:
+    # Cheap no-op when disabled
+    from neurograd.utils.memory import maybe_log_op_memory, maybe_flush_pool
+except Exception:
+    def maybe_log_op_memory(op_name, inputs, output):  # type: ignore
+        return
+    def maybe_flush_pool(op_name):  # type: ignore
+        return
 
 class Function(ABC):
     name = None
@@ -36,6 +44,13 @@ class Function(ABC):
         output_data = self.forward(*[inp.data for inp in processed_inputs])
         requires_grad = any(inp.requires_grad for inp in processed_inputs)
         output = Tensor(output_data, requires_grad=requires_grad, grad_fn=self)
+        # Optional per-op memory logging (enabled only inside MemoryMonitor)
+        try:
+            op_name = getattr(self, 'name', None) or self.__class__.__name__
+            maybe_log_op_memory(op_name, self.parent_tensors, output_data)
+            maybe_flush_pool(op_name)
+        except Exception:
+            pass
         return output
     
     @abstractmethod
