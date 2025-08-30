@@ -1,34 +1,36 @@
-# from .utils.device import auto_detect_device
-# DEVICE = auto_detect_device()
-# if DEVICE == "cpu":
-#     import numpy as xp
-# elif DEVICE == "cuda":
-#     import os, sys, subprocess, pathlib
-#     # Remove CuPy if already imported
-#     for mod in list(sys.modules.keys()):
-#         if mod.startswith("cupy"):
-#             del sys.modules[mod]
-#     # Install extras
-#     base = pathlib.Path.home() / ".cupy" / "cuda_lib" / "12.x"
-#     libs = {"cutensor": "cutensor", "cudnn": "cudnn"}
-#     for lib, dirname in libs.items():
-#         target = base / dirname
-#         if not target.exists():
-#             subprocess.run(
-#                 [sys.executable, "-m", "cupyx.tools.install_library",
-#                  "--library", lib, "--cuda", "12.x"],
-#                 check=True
-#             )
-#     # Set accelerators
-#     os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
-#     import cupy as xp
-
+### DEVICE SETUP
 from .utils.device import auto_detect_device
 DEVICE = auto_detect_device()
 if DEVICE == "cpu":
     import numpy as xp
 elif DEVICE == "cuda":
+    import os, sys, subprocess, pathlib
+    # Remove CuPy if already imported
+    for mod in list(sys.modules.keys()):
+        if mod.startswith("cupy"):
+            del sys.modules[mod]
+    # Install extras
+    base = pathlib.Path.home() / ".cupy" / "cuda_lib" / "12.x"
+    libs = {"cutensor": "cutensor"}
+    for lib, dirname in libs.items():
+        target = base / dirname
+        if not target.exists():
+            subprocess.run(
+                [sys.executable, "-m", "cupyx.tools.install_library",
+                 "--library", lib, "--cuda", "12.x"],
+                check=True
+            )
+    # Set accelerators
+    os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
     import cupy as xp
+
+
+if DEVICE == "CUDA":
+    fuse = xp.fuse
+else:
+    fuse = lambda f: f
+
+
 
 # Now import everything else after xp is available
 from .functions import (arithmetic, math, linalg, activations, reductions, conv)
@@ -39,37 +41,21 @@ from .functions.tensor_ops import reshape, flatten, squeeze, expand_dims, concat
 from .functions.reductions import Sum, Mean, Max, Min, Std, sum, mean, max, min, std
 from .functions.conv import conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d
 from .tensor import Tensor, ones, zeros, ones_like, zeros_like, empty, arange, eye
+from .amp import autocast, GradScaler
+from .utils.graph import visualize_graph, save_graph, print_graph_structure
+import gc
 
-# Automatic Mixed Precision (AMP) support
-try:
-    from .amp import autocast, GradScaler
-except ImportError:
-    # Define dummy functions if AMP module not available
-    def autocast(*args, **kwargs):
-        import contextlib
-        return contextlib.nullcontext()
-    
-    class GradScaler:
-        def __init__(self, *args, **kwargs):
-            pass
-        def scale(self, x):
-            return x
-        def step(self, optimizer):
-            optimizer.step()
-        def update(self):
-            pass
-# Optional graph visualization (requires matplotlib)
-try:
-    from .utils.graph import visualize_graph, save_graph, print_graph_structure
-except ImportError:
-    # Define dummy functions if matplotlib is not available
-    def visualize_graph(*args, **kwargs):
-        print("Graph visualization requires matplotlib")
-    def save_graph(*args, **kwargs):
-        print("Graph saving requires matplotlib")
-    def print_graph_structure(*args, **kwargs):
-        print("Graph structure printing requires matplotlib")
-
+def flush():
+    if DEVICE == "cpu":
+        pass
+    try:
+        xp.cuda.runtime.deviceSynchronize()
+    except Exception:
+        pass
+    gc.collect()
+    # free cached device + pinned memory
+    xp.get_default_memory_pool().free_all_blocks()
+    xp.get_default_pinned_memory_pool().free_all_blocks()
 
 
 # Importing numpy data types for convenience. This allows users to use float32, int64, etc. directly

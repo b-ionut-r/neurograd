@@ -4,21 +4,12 @@ import neurograd as ng
 from neurograd import Tensor, xp
 import numpy as real_numpy
 
-if xp is real_numpy:
-    conditional_fuse = lambda f: f
-else:
-    from cupy import fuse
-    conditional_fuse = fuse
 
-@conditional_fuse
+@ng.fuse
 def fused_rmsprop_step(param, grad, weight_decay, momentum, lr, beta, eps):
-    # grad_eff = grad + weight_decay * param
     grad_eff = grad + weight_decay * param
-    # momentum_new = beta * momentum + (1 - beta) * grad_eff^2
     momentum_new = beta * momentum + (1.0 - beta) * grad_eff * grad_eff
-    # denom = sqrt(momentum_new) + eps
     denom = xp.sqrt(momentum_new) + eps
-    # param_new = param - lr * grad_eff / denom
     param_new = param - lr * grad_eff / denom
     return param_new, momentum_new
 

@@ -26,7 +26,6 @@ class Conv2D(Module):
         
         import neurograd as ng     
         from neurograd.utils.aliases import ACTIVATIONS, INITIALIZERS
-        from neurograd.functions.tensor_ops import SlidingWindowView
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -60,9 +59,6 @@ class Conv2D(Module):
         self.batch_momentum = batch_momentum
         self.use_bias = use_bias
         self.dtype = dtype
-        self.slider = SlidingWindowView(window_shape=self.kernel_size, 
-                                        strides=self.strides, 
-                                        axes=(2, 3))
         
         # Super init before adding parameters
         super().__init__()
@@ -85,7 +81,9 @@ class Conv2D(Module):
         from neurograd import conv2d
         X = X.cast(self.dtype) if self.dtype else X
         Z = conv2d(X, self.kernels, self.strides, self.padding, self.padding_value, 
-                   depthwise=self.depthwise, slider=self.slider)
+                   depthwise=self.depthwise, 
+                #    slider=self.slider
+                   )
         if self.use_bias:
             Z += self.bias
         # Apply BatchNorm if needed
@@ -107,21 +105,21 @@ class MaxPool2D(Module):
                 padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                 padding_value: Union[int, float] = 0,
                 dtype = None):
-        from neurograd.functions.tensor_ops import SlidingWindowView
+        
         self.pool_size = pool_size if isinstance(pool_size, tuple) else (pool_size, pool_size)
         self.strides = strides if isinstance(strides, tuple) else (strides, strides)
         self.padding = padding if isinstance(padding, tuple) else (padding, padding)
         self.padding_value = padding_value
         self.dtype = dtype
-        self.slider = SlidingWindowView(window_shape=self.pool_size,
-                                        strides=self.strides,
-                                        axes=(2, 3))
+        
         super().__init__()
 
     def forward(self, X):
         from neurograd import maxpool2d
         X = X.cast(self.dtype) if self.dtype else X
-        Z = maxpool2d(X, self.pool_size, self.strides, self.padding, self.padding_value, slider=self.slider)  
+        Z = maxpool2d(X, self.pool_size, self.strides, self.padding, self.padding_value, 
+                    #   slider=self.slider
+                      )
         return Z
 
 
@@ -133,21 +131,21 @@ class AveragePool2D(Module):
                 padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
                 padding_value: Union[int, float] = 0,
                 dtype = None):
-        from neurograd.functions.tensor_ops import SlidingWindowView
+        
         self.pool_size = pool_size if isinstance(pool_size, tuple) else (pool_size, pool_size)
         self.strides = strides if isinstance(strides, tuple) else (strides, strides)
         self.padding = padding if isinstance(padding, tuple) else (padding, padding)
         self.padding_value = padding_value
         self.dtype = dtype
-        self.slider = SlidingWindowView(window_shape=self.pool_size,
-                                        strides=self.strides,
-                                        axes=(2, 3))
+        
         super().__init__()
 
     def forward(self, X):
         from neurograd import averagepool2d
         X = X.cast(self.dtype) if self.dtype else X
-        Z = averagepool2d(X, self.pool_size, self.strides, self.padding, self.padding_value, slider=self.slider)  
+        Z = averagepool2d(X, self.pool_size, self.strides, self.padding, self.padding_value, 
+                        #   slider=self.slider
+                          )  
         return Z
 
 MaxPooling2D = MaxPool2D

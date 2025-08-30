@@ -4,13 +4,8 @@ import neurograd as ng
 from neurograd import Tensor, xp
 import numpy as real_numpy
 
-if xp is real_numpy:
-    conditional_fuse = lambda f: f
-else:
-    from cupy import fuse
-    conditional_fuse = fuse
 
-@conditional_fuse
+@ng.fuse
 def fused_adam_step(param, grad, weight_decay, m, v, lr, beta1, beta2, eps, t):
     grad_eff = grad + weight_decay * param
     m_new = beta1 * m + (1.0 - beta1) * grad_eff

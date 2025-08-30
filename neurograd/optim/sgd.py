@@ -4,13 +4,9 @@ import neurograd as ng
 from neurograd import Tensor, xp
 import numpy as real_numpy
 
-if xp is real_numpy:
-    conditional_fuse = lambda f: f
-else:
-    from cupy import fuse
-    conditional_fuse = fuse
 
-@conditional_fuse
+
+@ng.fuse
 def fused_sgd_step(param, grad, weight_decay, momentum, lr, beta):
     # grad_eff = grad + weight_decay * param
     grad_eff = grad + weight_decay * param

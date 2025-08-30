@@ -73,7 +73,8 @@ class Tensor:
         if self.grad is None:
             self.grad = grad
         else:
-            self.grad = self.grad + grad
+            # self.grad = self.grad + grad
+            xp.add(self.grad, grad, out=self.grad)
         
         # Backpropagate in reverse topological order
         for tensor in reversed(topo_order):
@@ -97,8 +98,8 @@ class Tensor:
                     if parent_tensor.grad is None:
                         parent_tensor.grad = parent_grad
                     else:
-                        parent_tensor.grad = parent_tensor.grad + parent_grad
-
+                        # parent_tensor.grad = parent_tensor.grad + parent_grad
+                        xp.add(parent_tensor.grad, parent_grad, out=parent_tensor.grad)
             
             # Clear intermediate results to save memory (unless retaining graph)
             if not retain_graph:

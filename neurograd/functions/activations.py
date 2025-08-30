@@ -1,3 +1,4 @@
+import neurograd as ng
 from neurograd import xp
 from neurograd.functions.base import Function
 from neurograd.nn.module import Module
@@ -23,9 +24,7 @@ class ReLU6(Function, Module):
         Function.__init__(self)
         Module.__init__(self)
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        output = xp.empty_like(x)
-        xp.clip(x, 0, 6, out=output)
-        return output
+        return xp.clip(x, 0, 6)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
         if x.requires_grad:
