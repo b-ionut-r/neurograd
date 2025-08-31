@@ -76,11 +76,10 @@ class ExpandDims(Function, Module):
         A = self.parent_tensors[0]
         return xp.squeeze(grad_output, axis=self.axis) if A.requires_grad else None
 
-class Concatenate(Function, Module):
+class Concatenate(Function):
     name = "Concatenate"
     def __init__(self, axis):
         Function.__init__(self)
-        Module.__init__(self)
         self.axis = axis
     def forward(self, *inputs: xp.ndarray) -> xp.ndarray:
         return xp.concatenate(inputs, axis=self.axis)
@@ -118,11 +117,10 @@ class Slice(Function, Module):
 
 class Cast(Function):
     name = "Cast"
-    def __init__(self, target_dtype, memsave: bool = False):
+    def __init__(self, target_dtype):
         super().__init__()
         self.target_dtype = target_dtype
         self.original_dtype = None
-        self.memsave = bool(memsave)
     def forward(self, input_data: xp.ndarray) -> xp.ndarray:
         self.original_dtype = input_data.dtype
         if self.original_dtype == self.target_dtype:
@@ -135,11 +133,6 @@ class Cast(Function):
         if grad_output.dtype == self.original_dtype:
             return grad_output
         return grad_output.astype(self.original_dtype, copy=False)
-    def _memsave(self, parent_tensors: "Sequence[Tensor]", output_tensor: "Tensor"):
-        if self.original_dtype != self.target_dtype and getattr(parent_tensors[0], "grad_fn", None) is not None:
-            del parent_tensors[0].data
-            ng.flush(gc=False)
-            parent_tensors[0].data = output_tensor.data
 
 class Pad(Function, Module):
     name = "Pad"
@@ -223,7 +216,7 @@ class SlidingWindowView(Function, Module):
         self.slices = tuple(slices)
         return xp.lib.stride_tricks.sliding_window_view(
             A, self.window_shape, self.axes)[self.slices]
-    def backward(self, grad_output):
+    def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         grad_buffer = xp.zeros(A.shape, dtype=grad_output.dtype)
         kwargs = {"writeable": True} if xp is np else {}
@@ -246,9 +239,8 @@ def expand_dims(A, axis):
     return ExpandDims(axis)(A)
 def concat(tensors: Sequence["Tensor"], axis: int) -> "Tensor":
     return Concatenate(axis=axis)(*tensors)
-def cast(A, target_dtype, memsave: bool = False):
-    """Functional cast with optional memsave to avoid dual copies."""
-    return Cast(target_dtype, memsave=memsave)(A)
+def cast(A, target_dtype):
+    return Cast(target_dtype)(A)
 def pad(A, pad_width, mode='constant', constant_values=0, memsave=False, **kwargs):
     return Pad(pad_width, mode, constant_values, memsave=memsave, **kwargs)(A)
 def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 

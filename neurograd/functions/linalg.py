@@ -6,6 +6,14 @@ from numpy.typing import ArrayLike
 if TYPE_CHECKING:
     from neurograd.tensor import Tensor
 
+def _transpose(arr):
+    """Transpose that works for any ndim >= 1"""
+    if arr.ndim == 1:
+        return arr  # 1D arrays don't transpose
+    elif arr.ndim == 2:
+        return arr.T  # Use .T for 2D for efficiency
+    else:
+        return xp.swapaxes(arr, -2, -1)  # Swap last two axes for higher dims
 
 # Matrix OPS classes for Functional API
 # These classes implement matrix operations like matrix/tensor dot products, transpose, etc.
@@ -20,19 +28,27 @@ class MatMul(Function, Module):
     def backward(self, grad_output: xp.ndarray) -> tuple[xp.ndarray, xp.ndarray]:
         A, B = self.parent_tensors
         grad_A = grad_B = None
-        def _transpose(arr):
-            """Transpose that works for any ndim >= 1"""
-            if arr.ndim == 1:
-                return arr  # 1D arrays don't transpose
-            elif arr.ndim == 2:
-                return arr.T  # Use .T for 2D for efficiency
-            else:
-                return xp.swapaxes(arr, -2, -1)  # Swap last two axes for higher dims
         if A.requires_grad:
             grad_A = xp.matmul(grad_output, _transpose(B.data))
         if B.requires_grad:
             grad_B = xp.matmul(_transpose(A.data), grad_output)
         return grad_A, grad_B
+    
+
+class Linear(Function, Module):
+    name = "Linear"
+    """Applies a linear transformation: y = XW + b"""
+    def __init__(self):
+        Function.__init__(self)
+        Module.__init__(self)
+    def forward(self, X: xp.ndarray, W: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
+        return xp.matmul(X, W) + b
+    def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
+        X, W, b = self.parent_tensors
+        grad_X = xp.matmul(grad_output, _transpose(W.data)) if X.requires_grad else None
+        grad_W = xp.matmul(_transpose(X.data), grad_output) if W.requires_grad else None
+        grad_b = xp.sum(grad_output, axis=0) if b.requires_grad else None
+        return grad_X, grad_W, grad_b
 
 
 class TensorDot(Function, Module):
@@ -89,7 +105,7 @@ class TensorDot(Function, Module):
                 perm[ax] = len(B_axes) + i
             grad_B = xp.transpose(grad_B, perm) 
         return grad_A, grad_B
-    
+
 class EinSum(Function, Module):
     name = "EinSum"
     def __init__(self, subscripts: str):
@@ -165,6 +181,8 @@ class Transpose(Function, Module):
 # This function is designed to be used directly with Tensor objects.
 def matmul(A, B):
     return MatMul()(A, B)
+def linear(X, W, b):
+    return Linear()(X, W, b)
 def dot(A, B):
     return MatMul()(A, B)
 def tensordot(A, B, axes):

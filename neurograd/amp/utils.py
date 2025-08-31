@@ -72,8 +72,7 @@ def should_cast_to_fp16(op_name: str) -> bool:
     return True
 
 
-def maybe_cast_tensor(tensor, target_dtype=None, op_name: str = "unknown",
-                      memsave: bool = False) -> 'Tensor':
+def maybe_cast_tensor(tensor, target_dtype=None, op_name: str = "unknown") -> 'Tensor':
     """
     Cast tensor to appropriate dtype based on autocast context and operation type.
     
@@ -98,13 +97,13 @@ def maybe_cast_tensor(tensor, target_dtype=None, op_name: str = "unknown",
         if should_cast_to_fp16(op_name):
             target_dtype = autocast.get_autocast_dtype()
         else:
-            return tensor.cast(ng.float32, memsave=memsave)
+            return tensor.cast(ng.float32)
     
     # Only cast if different from current dtype
-    if tensor.data.dtype == target_dtype and not memsave:
+    if tensor.data.dtype == target_dtype:
         return tensor
 
-    return tensor.cast(target_dtype, memsave=memsave)
+    return tensor.cast(target_dtype)
 
 
 def get_fp32_ops() -> Set[str]:

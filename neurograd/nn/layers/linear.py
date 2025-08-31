@@ -11,7 +11,7 @@ class Linear(Module):
         from neurograd import xp
         from neurograd.utils.aliases import ACTIVATIONS, INITIALIZERS
         import neurograd as ng
-        
+
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -56,12 +56,12 @@ class Linear(Module):
     def forward(self, X):
         import neurograd as ng
         from neurograd import xp
-        # X will be of shape (batch_size, in_features)
         X = X.cast(self.dtype) if self.dtype else X
-        Z = ng.matmul(X, self.weight)
         if self.use_bias:
-            Z += self.bias
-            
+            Z = ng.linear(X, self.weight, self.bias)
+        else:
+            Z = ng.dot(X, self.weight)
+       
         # Apply BatchNorm if needed
         if self.batch_normalization:
             Z = self.batch_norm(Z)

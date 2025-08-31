@@ -30,7 +30,7 @@ class Function(ABC):
         op_name = getattr(self, 'name', None) or self.__class__.__name__
         if is_autocast_enabled():
             if op_name != 'Cast':  # Avoid recursion with Cast operations
-                processed_inputs = [maybe_cast_tensor(inp, op_name=op_name, memsave=False) for inp in processed_inputs]
+                processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
         # Computations
         self.parent_tensors = processed_inputs
         output_data = self.forward(*[inp.data for inp in processed_inputs])

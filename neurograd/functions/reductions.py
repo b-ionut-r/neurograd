@@ -80,7 +80,7 @@ class Max(Function, Module):
             return None
         # Create gradient mask for max elements, splitting ties evenly along the axis.
         # Use self.max_vals which already has keepdims=True for broadcasting
-        mask = (x.data == self.max_vals).astype(x.dtype)
+        mask = (x.data == self.max_vals).astype(x.data.dtype)
         if self.axis is None:
             mask /= xp.sum(mask)  # In-place division
         else:
@@ -122,7 +122,7 @@ class Min(Function, Module):
             return None
         # Create gradient mask for min elements, splitting ties evenly along the axis.
         # Use self.min_vals which already has keepdims=True for broadcasting  
-        mask = (x.data == self.min_vals).astype(x.dtype)
+        mask = (x.data == self.min_vals).astype(x.data.dtype)
         if self.axis is None:
             mask /= xp.sum(mask)  # In-place division
         else:

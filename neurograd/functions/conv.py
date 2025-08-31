@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarray],
            strides: Union[int, Tuple[int, ...]] = (1, 1),
            padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
-           padding_value: Union[int, float] = 0, depthwise: bool = False, slider = None):
+           padding_value: Union[int, float] = 0, depthwise: bool = False):
     
     import neurograd as ng
     from neurograd.functions.tensor_ops import SlidingWindowView
@@ -55,12 +55,8 @@ def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarr
             memsave=True
         )
         
-    if slider is None:
-        slider = SlidingWindowView(window_shape=(F_H, F_W), strides=strides, axes=(2, 3))
-    else:
-        slider.window_shape = (F_H, F_W)
-        slider.strides = strides
-        slider.axes = (2, 3)
+    # Create a fresh sliding window view op per call
+    slider = SlidingWindowView(window_shape=(F_H, F_W), strides=strides, axes=(2, 3))
     if not depthwise:
         slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)
         filters = filters # (F_N, C, F_H, F_W)
@@ -81,7 +77,7 @@ def pool2d(input: Union["Tensor", xp.ndarray],
            pool_size: Union[int, Tuple[int, ...]],
            strides: Union[int, Tuple[int, ...]] = (1, 1),
            padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
-           padding_value: Union[int, float] = 0, pooling_fn = None, slider=None):
+           padding_value: Union[int, float] = 0, pooling_fn = None):
     
     import neurograd as ng
     from neurograd.functions.tensor_ops import SlidingWindowView
@@ -128,12 +124,8 @@ def pool2d(input: Union["Tensor", xp.ndarray],
     input = ng.pad(input, pad_width=padding, mode='constant', constant_values=padding_value,
                    memsave=True)
 
-    if slider is None:
-        slider = SlidingWindowView(window_shape=(P_H, P_W), strides=strides, axes=(2, 3))
-    else:
-        slider.window_shape = (P_H, P_W)
-        slider.strides = strides
-        slider.axes = (2, 3)
+    # Create a fresh sliding window view op per call
+    slider = SlidingWindowView(window_shape=(P_H, P_W), strides=strides, axes=(2, 3))
     slides = slider(input)  # (N, C, out_H, out_W, P_H, P_W)
     output = pooling_fn(slides, axis=(4, 5), keepdims=False) # output shape: (N, C, out_H, out_W) # (4, 5) OR (-2, -1)
     
@@ -144,18 +136,18 @@ def maxpool2d(input: Union["Tensor", xp.ndarray],
               pool_size: Union[int, Tuple[int, ...]],
               strides: Union[int, Tuple[int, ...]] = (2, 2),
               padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
-              padding_value: Union[int, float] = 0, slider=None):
+              padding_value: Union[int, float] = 0):
     import neurograd as ng
-    return pool2d(input, pool_size, strides, padding, padding_value, ng.max, slider)
+    return pool2d(input, pool_size, strides, padding, padding_value, ng.max)
 
 
 def averagepool2d(input: Union["Tensor", xp.ndarray], 
                   pool_size: Union[int, Tuple[int, ...]],
                   strides: Union[int, Tuple[int, ...]] = (2, 2),
                   padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
-                  padding_value: Union[int, float] = 0, slider=None):
+                  padding_value: Union[int, float] = 0):
     import neurograd as ng
-    return pool2d(input, pool_size, strides, padding, padding_value, ng.mean, slider)
+    return pool2d(input, pool_size, strides, padding, padding_value, ng.mean)
 
 
 # Set aliases

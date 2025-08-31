@@ -38,7 +38,7 @@ else:
 from .functions import (arithmetic, math, linalg, activations, reductions, conv)
 from .functions.arithmetic import add, sub, mul, div, pow
 from .functions.math import log, exp, sin, cos, tan, sqrt, cbrt, log10, log2, abs, clip
-from .functions.linalg import matmul, dot, tensordot, einsum, transpose
+from .functions.linalg import matmul, linear, dot, tensordot, einsum, transpose
 from .functions.tensor_ops import reshape, flatten, squeeze, expand_dims, concat, cast, pad, sliding_window_view, newaxis
 from .functions.reductions import sum, mean, max, min, std, var
 from .functions.conv import conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d
