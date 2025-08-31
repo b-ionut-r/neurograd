@@ -110,7 +110,7 @@ class Tensor:
                 if not is_leaf:  # Only clear grads for intermediate tensors
                     tensor.grad = None
 
-    def cast(self, dtype):
+    def cast(self, dtype, memsave=False):
         try: 
             # Check if already the correct dtype
             if self.data.dtype == dtype:
@@ -118,7 +118,7 @@ class Tensor:
             
             # Use proper autograd casting operation
             from neurograd.functions.tensor_ops import Cast
-            cast_op = Cast(target_dtype=dtype)
+            cast_op = Cast(target_dtype=dtype, memsave=memsave)
             return cast_op(self)
         except Exception as e:
             raise TypeError(f"{dtype} isn't a supported data type for the array module: {e}.")

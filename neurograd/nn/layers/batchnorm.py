@@ -1,4 +1,10 @@
+import neurograd as ng
 from ..module import Module
+
+@ng.fuse
+def exp_mov_avg(old, new, alpha):
+    return alpha * old + (1 - alpha) * new
+
 
 
 class BatchNorm(Module):
@@ -16,10 +22,11 @@ class BatchNorm(Module):
     def forward(self, X):
         if self.training:
             batch_mean = X.mean(axis=0, keepdims=True)
-            batch_var = ((X - batch_mean) ** 2).mean(axis=0, keepdims=True)
+            # Use built-in variance reduction to avoid materializing squared residuals
+            batch_var = X.var(axis=0, keepdims=True)
             # Update running stats
-            self.running_mean.data = self.batch_momentum * self.running_mean.data + (1 - self.batch_momentum) * batch_mean.data
-            self.running_var.data = self.batch_momentum * self.running_var.data + (1 - self.batch_momentum) * batch_var.data
+            self.running_mean.data = exp_mov_avg(self.running_mean.data, batch_mean.data, self.batch_momentum)
+            self.running_var.data = exp_mov_avg(self.running_var.data, batch_var.data, self.batch_momentum)
             X_norm = (X - batch_mean) / (batch_var + self.epsilon).sqrt()
         else:
             X_norm = (X - self.running_mean) / (self.running_var + self.epsilon).sqrt() 
@@ -41,11 +48,11 @@ class BatchNorm2D(Module):
     def forward(self, X):
         if self.training:
             batch_mean = X.mean(axis=(0, 2, 3), keepdims=True)
-            batch_var = ((X - batch_mean) ** 2).mean(axis=(0, 2, 3), keepdims=True)
+            # Use built-in variance reduction to avoid materializing squared residuals
+            batch_var = X.var(axis=(0, 2, 3), keepdims=True)
             # Update running stats
-            self.running_mean.data = self.batch_momentum * self.running_mean.data + (1 - self.batch_momentum) * batch_mean.data
-            self.running_var.data = self.batch_momentum * self.running_var.data + (1 - self.batch_momentum) * batch_var.data
-            
+            self.running_mean.data = exp_mov_avg(self.running_mean.data, batch_mean.data, self.batch_momentum)
+            self.running_var.data = exp_mov_avg(self.running_var.data, batch_var.data, self.batch_momentum)
             X_norm = (X - batch_mean) / (batch_var + self.epsilon).sqrt()
         else:
             X_norm = (X - self.running_mean) / (self.running_var + self.epsilon).sqrt()

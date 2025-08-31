@@ -117,14 +117,12 @@ class Slice(Function, Module):
 
 
 class Cast(Function):
-    """
-    Cast tensor to a different dtype while maintaining autograd graph
-    """
     name = "Cast"
-    def __init__(self, target_dtype):
+    def __init__(self, target_dtype, memsave: bool = False):
         super().__init__()
         self.target_dtype = target_dtype
         self.original_dtype = None
+        self.memsave = bool(memsave)
     def forward(self, input_data: xp.ndarray) -> xp.ndarray:
         self.original_dtype = input_data.dtype
         if self.original_dtype == self.target_dtype:
@@ -136,8 +134,12 @@ class Cast(Function):
             return None
         if grad_output.dtype == self.original_dtype:
             return grad_output
-        return grad_output.astype(self.original_dtype, copy=False) ### OOM ???
-    
+        return grad_output.astype(self.original_dtype, copy=False)
+    def _memsave(self, parent_tensors: "Sequence[Tensor]", output_tensor: "Tensor"):
+        if self.original_dtype != self.target_dtype and getattr(parent_tensors[0], "grad_fn", None) is not None:
+            del parent_tensors[0].data
+            ng.flush(gc=False)
+            parent_tensors[0].data = output_tensor.data
 
 class Pad(Function, Module):
     name = "Pad"
@@ -198,6 +200,7 @@ class Clone(Function, Module):
         return grad_output if A.requires_grad else None
 
 
+
 class SlidingWindowView(Function, Module):
     """
     Smart Vectorized Sliding Window View with AutoDiff Support and
@@ -230,7 +233,7 @@ class SlidingWindowView(Function, Module):
         # Accumulate gradients using cached view
         grad_view += grad_output
         return grad_buffer
-
+    
 
 
 def reshape(A, new_shape):
@@ -243,8 +246,9 @@ def expand_dims(A, axis):
     return ExpandDims(axis)(A)
 def concat(tensors: Sequence["Tensor"], axis: int) -> "Tensor":
     return Concatenate(axis=axis)(*tensors)
-def cast(A, target_dtype):
-    return Cast(target_dtype)(A)
+def cast(A, target_dtype, memsave: bool = False):
+    """Functional cast with optional memsave to avoid dual copies."""
+    return Cast(target_dtype, memsave=memsave)(A)
 def pad(A, pad_width, mode='constant', constant_values=0, memsave=False, **kwargs):
     return Pad(pad_width, mode, constant_values, memsave=memsave, **kwargs)(A)
 def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 
@@ -252,6 +256,7 @@ def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[i
     return SlidingWindowView(window_shape, axes, strides)(A)
 def clone(A):
     return Clone()(A)
+
 
 # newaxis constant for numpy-style indexing
 newaxis = None
