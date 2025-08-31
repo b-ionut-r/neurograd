@@ -11,7 +11,7 @@ class Sum(Function, Module):
         self.axis = axis
         self.keepdims = keepdims
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        return xp.sum(x, axis=self.axis, keepdims=self.keepdims)
+        return xp.sum(x, axis=self.axis, keepdims=self.keepdims, dtype=xp.float32)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
         if not x.requires_grad:
@@ -36,7 +36,7 @@ class Mean(Function, Module):
         self.axis = axis
         self.keepdims = keepdims
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        return xp.mean(x, axis=self.axis, keepdims=self.keepdims)
+        return xp.mean(x, axis=self.axis, keepdims=self.keepdims, dtype=xp.float32)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
         if not x.requires_grad:
@@ -153,9 +153,8 @@ class Std(Function, Module):
         self.keepdims = keepdims
         self.eps = eps
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        # Cache mean and std for backward pass to avoid recomputation
-        self.mean = xp.mean(x, axis=self.axis, keepdims=True)
-        self.std_vals = xp.std(x, axis=self.axis, keepdims=True)
+        self.mean = xp.mean(x, axis=self.axis, keepdims=True, dtype=xp.float32)
+        self.std_vals = xp.std(x, axis=self.axis, keepdims=True, dtype=xp.float32)
         if self.keepdims:
             return self.std_vals
         else:
@@ -178,8 +177,6 @@ class Std(Function, Module):
                 n *= x.shape[a]
         # Avoid divide-by-zero
         std_safe = xp.where(std == 0, self.eps, std)
-        # d/dx std(x) = (x - mean) / (n * std)   (population)
-        # Combine operations to reduce intermediates
         base_grad = (x.data - mean) / (n * std_safe)
         # If keepdims=False, expand grad_output back along reduced axes
         go = grad_output
@@ -203,9 +200,8 @@ class Var(Function, Module):
         self.ddof = ddof
         self.eps = eps
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        # Cache mean for backward pass to avoid recomputation
-        self.mean = xp.mean(x, axis=self.axis, keepdims=True)
-        var_vals = xp.var(x, axis=self.axis, keepdims=self.keepdims, ddof=self.ddof)
+        self.mean = xp.mean(x, axis=self.axis, keepdims=True, dtype=xp.float32)
+        var_vals = xp.var(x, axis=self.axis, keepdims=self.keepdims, ddof=self.ddof, dtype=xp.float32)
         return var_vals
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]

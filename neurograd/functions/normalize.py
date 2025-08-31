@@ -41,20 +41,22 @@ class BatchNormalizer(Function):
 
     def forward(self, X: xp.ndarray, mean: xp.ndarray, var: xp.ndarray,
                 mean_scaler: xp.ndarray, var_scaler: xp.ndarray) -> xp.ndarray:
-        inv_std = 1.0 / xp.sqrt(var + self.epsilon)
-        # Call as class attribute to avoid implicit `self` binding
-        return BatchNormalizer._fw_fused(X, mean, inv_std, var_scaler, mean_scaler)
+        inv_std = xp.asarray(1.0 / xp.sqrt(var + self.epsilon), dtype=xp.float32)
+        mean32 = xp.asarray(mean, dtype=xp.float32)
+        var_scaler32 = xp.asarray(var_scaler, dtype=xp.float32)
+        mean_scaler32 = xp.asarray(mean_scaler, dtype=xp.float32)
+        out = BatchNormalizer._fw_fused(X, mean32, inv_std, var_scaler32, mean_scaler32)
+        return out.astype(X.dtype, copy=False)
 
     def backward(self, grad_output: xp.ndarray):
         X, mean, var, mean_scaler, var_scaler = self.parent_tensors
         axes = self.axes
 
-        # Recompute intermediates (no caching from forward)
-        inv_std  = 1.0 / xp.sqrt(var.data + self.epsilon)
-        x_center = X.data - mean.data
-        inv_std3 = inv_std ** 3  # (var+eps)^(-3/2)
+        inv_std  = xp.asarray(1.0 / xp.sqrt(var.data + self.epsilon), dtype=xp.float32)
+        x_center = xp.asarray(X.data - mean.data, dtype=xp.float32)
+        inv_std3 = inv_std ** 3
 
-        dX = (BatchNormalizer._dX_fused(grad_output, inv_std, var_scaler.data)
+        dX = (BatchNormalizer._dX_fused(grad_output, inv_std, xp.asarray(var_scaler.data, dtype=xp.float32))
               if X.requires_grad else None)
 
         dmean_scaler = (xp.sum(grad_output, axis=axes, keepdims=True)
@@ -64,14 +66,15 @@ class BatchNormalizer(Function):
                               axis=axes, keepdims=True)
                        if var_scaler.requires_grad else None)
 
-        dmean = (xp.sum(BatchNormalizer._dmean_term_fused(grad_output, inv_std, var_scaler.data),
+        dmean = (xp.sum(BatchNormalizer._dmean_term_fused(grad_output, inv_std, xp.asarray(var_scaler.data, dtype=xp.float32)),
                         axis=axes, keepdims=True)
                  if mean.requires_grad else None)
 
-        dvar = (xp.sum(BatchNormalizer._dvar_term_fused(grad_output, x_center, inv_std3, var_scaler.data),
+        dvar = (xp.sum(BatchNormalizer._dvar_term_fused(grad_output, x_center, inv_std3, xp.asarray(var_scaler.data, dtype=xp.float32)),
                        axis=axes, keepdims=True)
                 if var.requires_grad else None)
-
+        if dX is not None:
+            dX = dX.astype(X.data.dtype, copy=False)
         return dX, dmean, dvar, dmean_scaler, dvar_scaler
 
 

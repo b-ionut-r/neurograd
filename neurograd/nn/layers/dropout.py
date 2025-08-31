@@ -9,7 +9,10 @@ class Dropout(Module):
         from neurograd import xp, Tensor
         if self.training:
             keep_prob = 1 - self.dropout_rate
-            mask = (xp.random.rand(*X.shape) < keep_prob) / keep_prob
+            dtype = X.data.dtype
+            rp = xp.asarray(keep_prob, dtype=dtype)
+            mask = (xp.random.rand(*X.shape).astype(dtype) < rp).astype(dtype)
+            mask = mask / rp
             mask = Tensor(mask, requires_grad=False)
             X = X * mask
         return X
@@ -24,8 +27,10 @@ class Dropout2D(Module):
         from neurograd import xp, Tensor
         if self.training:
             keep_prob = 1 - self.dropout_rate
-            # For NCHW format: (N, C, H, W), apply dropout per channel
-            mask = (xp.random.rand(X.shape[0], X.shape[1], 1, 1) < keep_prob) / keep_prob
+            dtype = X.data.dtype
+            rp = xp.asarray(keep_prob, dtype=dtype)
+            mask = (xp.random.rand(X.shape[0], X.shape[1], 1, 1).astype(dtype) < rp).astype(dtype)
+            mask = mask / rp
             mask = Tensor(mask, requires_grad=False)
             X = X * mask
         return X

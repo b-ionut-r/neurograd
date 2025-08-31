@@ -23,6 +23,8 @@ _FP32_OPS: Set[str] = {
     "cast",
     # pow is risky in fp16 except for tiny integer exponents
     "pow",
+    # normalization
+    "batchnormalizer",
 }
 
 # Ops that are **safe** to run in FP16 (or BF16) by default
@@ -40,6 +42,9 @@ _FP16_SAFE_OPS: Set[str] = {
 }
 
 
+
+# FP32 ops that should not pre-cast inputs; instead, compute with FP32 accumulation
+_FP32_NO_PRECAST: Set[str] = {"sum", "mean", "std", "var", "batchnormalizer"}
 
 def should_cast_to_fp16(op_name: str) -> bool:
     """
@@ -97,6 +102,9 @@ def maybe_cast_tensor(tensor, target_dtype=None, op_name: str = "unknown") -> 'T
         if should_cast_to_fp16(op_name):
             target_dtype = autocast.get_autocast_dtype()
         else:
+            # Avoid pre-casting large tensors for certain FP32 ops; rely on op to use FP32 accumulate
+            if op_name and op_name.lower() in _FP32_NO_PRECAST:
+                return tensor
             return tensor.cast(ng.float32)
     
     # Only cast if different from current dtype

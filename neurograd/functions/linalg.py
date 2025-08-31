@@ -42,7 +42,9 @@ class Linear(Function, Module):
         Function.__init__(self)
         Module.__init__(self)
     def forward(self, X: xp.ndarray, W: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
-        return xp.matmul(X, W) + b
+        out = xp.matmul(X, W)
+        xp.add(out, b, out=out)
+        return out
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         X, W, b = self.parent_tensors
         grad_X = xp.matmul(grad_output, _transpose(W.data)) if X.requires_grad else None
