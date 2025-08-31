@@ -23,6 +23,8 @@ elif DEVICE == "cuda":
     # Set accelerators
     os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
     import cupy as xp
+    # xp.cuda.set_allocator(None)  # Use default memory pool
+    # xp.cuda.set_pinned_memory_allocator(None)  # Use default pinned memory pool
 
 
 if DEVICE == "CUDA":
@@ -45,14 +47,15 @@ from .amp import autocast, GradScaler
 from .utils.graph import visualize_graph, save_graph, print_graph_structure
 import gc
 
-def flush():
+def flush(gc=True):
     if DEVICE == "cpu":
         pass
     try:
         xp.cuda.runtime.deviceSynchronize()
     except Exception:
         pass
-    gc.collect()
+    if gc:
+        gc.collect()
     # free cached device + pinned memory
     xp.get_default_memory_pool().free_all_blocks()
     xp.get_default_pinned_memory_pool().free_all_blocks()

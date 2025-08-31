@@ -39,6 +39,9 @@ class Function(ABC):
         output_data = self.forward(*[inp.data for inp in processed_inputs])
         requires_grad = any(inp.requires_grad for inp in processed_inputs)
         output = Tensor(output_data, requires_grad=requires_grad, grad_fn=self)
+        # Do memsave if ops has one
+        if hasattr(self, "_memsave") and getattr(self, "memsave", False):
+            self._memsave(self.parent_tensors, output)
         # Optional per-op memory logging (enabled only inside MemoryMonitor)
         try:
             op_name = getattr(self, 'name', None) or self.__class__.__name__

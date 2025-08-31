@@ -1,3 +1,4 @@
+import neurograd as ng
 from neurograd import xp
 from .base import Function
 from neurograd.nn.module import Module
@@ -5,6 +6,7 @@ from typing import TYPE_CHECKING, Union, Tuple, Sequence
 from numpy.typing import ArrayLike
 if TYPE_CHECKING:
     from neurograd.tensor import Tensor
+import gc
 
 
 
@@ -139,14 +141,15 @@ class Cast(Function):
 class Pad(Function, Module):
     name = "Pad"
     """Pad tensor with zeros or specified value"""
-    
-    def __init__(self, pad_width: Union[Sequence, ArrayLike, int], mode='constant', 
-                 constant_values=0, **kwargs):
+
+    def __init__(self, pad_width: Union[Sequence, ArrayLike, int], mode='constant',
+                 constant_values=0, memsave: bool = False, **kwargs):
         self.pad_width_input = pad_width
         self.mode = mode
         self.constant_values = constant_values
         self.kwargs = kwargs
-    
+        self.memsave = memsave
+
     def forward(self, A: xp.ndarray) -> xp.ndarray:
         # Normalize pad_width based on tensor dimensions
         if isinstance(self.pad_width_input, int):
@@ -155,16 +158,15 @@ class Pad(Function, Module):
             pad_width = [(p, p) for p in self.pad_width_input]
         else:
             pad_width = list(self.pad_width_input)
-        
-        self.pad_width = pad_width
-        return xp.pad(A, pad_width=self.pad_width, mode=self.mode, 
+
+        self.pad_width = pad_width  # store for later slicing
+        return xp.pad(A, pad_width=self.pad_width, mode=self.mode,
                       constant_values=self.constant_values, **self.kwargs)
-    
+
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         if not A.requires_grad:
             return None
-        
         slices = []
         for lower, upper in self.pad_width:
             if upper == 0:
@@ -172,6 +174,15 @@ class Pad(Function, Module):
             else:
                 slices.append(slice(lower, -upper))
         return grad_output[tuple(slices)]
+    
+    # >>> new: returns the inner view (no copy) that matches the original input region
+    def _memsave(self, parent_tensors: Sequence["Tensor"], output_tensor: "Tensor"):
+        if not hasattr(self, "pad_width"):
+            raise RuntimeError("pad_width not set; call forward() first.")
+        del parent_tensors[0].data  # free parent tensor data to save memory
+        ng.flush(gc=False)
+        slices = tuple(slice(l, None if u == 0 else -u) for (l, u) in self.pad_width)
+        parent_tensors[0].data = output_tensor.data[slices]
 
 
 
@@ -253,8 +264,8 @@ def concat(tensors: Sequence["Tensor"], axis: int) -> "Tensor":
     return Concatenate(axis=axis)(*tensors)
 def cast(A, target_dtype):
     return Cast(target_dtype)(A)
-def pad(A, pad_width, mode='constant', constant_values=0, **kwargs):
-    return Pad(pad_width, mode, constant_values, **kwargs)(A)
+def pad(A, pad_width, mode='constant', constant_values=0, memsave=False, **kwargs):
+    return Pad(pad_width, mode, constant_values, memsave, **kwargs)(A)
 def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 
                         strides: Union[int, Tuple[int, ...]] = (1, 1)):
     return SlidingWindowView(window_shape, axes, strides)(A)
