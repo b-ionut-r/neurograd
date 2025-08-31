@@ -4,6 +4,7 @@ import neurograd as ng
 from neurograd.tensor import Tensor
 from neurograd import xp
 from neurograd.utils.memory import maybe_log_op_memory
+from neurograd.utils.no_grad import is_grad_enabled
 from neurograd.amp.autocast import is_autocast_enabled
 from neurograd.amp.utils import maybe_cast_tensor
 
@@ -32,15 +33,20 @@ class Function(ABC):
             if op_name != 'Cast':  # Avoid recursion with Cast operations
                 processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
         # Computations
-        self.parent_tensors = processed_inputs
+        grad_on = is_grad_enabled()
+        if grad_on:
+            self.parent_tensors = processed_inputs
+        else:
+            self.parent_tensors = []
         output_data = self.forward(*[inp.data for inp in processed_inputs])
-        requires_grad = any(inp.requires_grad for inp in processed_inputs)
-        output = Tensor(output_data, requires_grad=requires_grad, grad_fn=self)
+        requires_grad = any(inp.requires_grad for inp in processed_inputs) if grad_on else False
+        output = Tensor(output_data, requires_grad=requires_grad, grad_fn=(self if (grad_on and requires_grad) else None))
         # Do memsave if ops has one
+        parents_for_hooks = self.parent_tensors if grad_on else processed_inputs
         if hasattr(self, "_memsave") and getattr(self, "memsave", False):
-            self._memsave(self.parent_tensors, output)
+            self._memsave(parents_for_hooks, output)
         # Optional per-op memory logging (enabled only inside MemoryMonitor)
-        maybe_log_op_memory(op_name, self.parent_tensors, output_data)
+        maybe_log_op_memory(op_name, parents_for_hooks, output_data)
         return output
 
     @abstractmethod
