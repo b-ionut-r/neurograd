@@ -8,11 +8,8 @@ import numpy as real_numpy
 
 @ng.fuse
 def fused_sgd_step(param, grad, weight_decay, momentum, lr, beta):
-    # grad_eff = grad + weight_decay * param
     grad_eff = grad + weight_decay * param
-    # momentum_new = beta * momentum + (1 - beta) * grad_eff
     momentum_new = beta * momentum + (1.0 - beta) * grad_eff
-    # param_new = param - lr * momentum_new
     param_new = param - lr * momentum_new
     return param_new, momentum_new
 

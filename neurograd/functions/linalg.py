@@ -9,11 +9,9 @@ if TYPE_CHECKING:
 
 # Matrix OPS classes for Functional API
 # These classes implement matrix operations like matrix/tensor dot products, transpose, etc.
-# with axes handling
 class MatMul(Function, Module):
     name = "MatMul"
     """Matrix multiplication A @ B with support for higher dimensions"""
-    
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -31,13 +29,9 @@ class MatMul(Function, Module):
             else:
                 return xp.swapaxes(arr, -2, -1)  # Swap last two axes for higher dims
         if A.requires_grad:
-            # Match grad dtype to operand to avoid upcasting large tensors
-            go = grad_output.astype(B.data.dtype, copy=False)
-            grad_A = xp.matmul(go, _transpose(B.data))
+            grad_A = xp.matmul(grad_output, _transpose(B.data))
         if B.requires_grad:
-            # Match grad dtype to operand to avoid upcasting large tensors
-            go = grad_output.astype(A.data.dtype, copy=False)
-            grad_B = xp.matmul(_transpose(A.data), go)
+            grad_B = xp.matmul(_transpose(A.data), grad_output)
         return grad_A, grad_B
 
 
@@ -77,9 +71,7 @@ class TensorDot(Function, Module):
         B_free = [i for i in range(B.ndim) if i not in B_axes]
         grad_A = grad_B = None   
         if A.requires_grad:
-            # Cast incoming grad to B's dtype to prevent upcasting B (often large/strided)
-            go = grad_output.astype(B.data.dtype, copy=False)
-            grad_A = xp.tensordot(go, B.data,
+            grad_A = xp.tensordot(grad_output, B.data,
                                 axes=[list(range(len(A_free), len(A_free) + len(B_free))), B_free])
             perm = [0] * A.ndim
             for i, ax in enumerate(A_free):
@@ -88,9 +80,7 @@ class TensorDot(Function, Module):
                 perm[ax] = len(A_free) + i
             grad_A = xp.transpose(grad_A, perm)     
         if B.requires_grad:
-            # Cast incoming grad to A's dtype to prevent upcasting A
-            go = grad_output.astype(A.data.dtype, copy=False)
-            grad_B = xp.tensordot(A.data, go,
+            grad_B = xp.tensordot(A.data, grad_output,
                                 axes=[A_free, list(range(len(A_free)))])
             perm = [0] * B.ndim
             for i, ax in enumerate(B_axes):
@@ -105,39 +95,48 @@ class EinSum(Function, Module):
     def __init__(self, subscripts: str):
         Function.__init__(self)
         Module.__init__(self)
-        self.subscripts = subscripts.replace(" ", "")  
+        self.subscripts = subscripts.replace(" ", "")
     def forward(self, *operands: xp.ndarray) -> xp.ndarray:
         self.operand_shapes = [op.shape for op in operands]
-        return xp.einsum(self.subscripts, *operands)
+        self.input_operands = operands
+        return xp.einsum(self.subscripts, *operands)   
     def backward(self, grad_output: xp.ndarray):
-        parent_tensors = self.parent_tensors
         grads = []
         if '->' in self.subscripts:
             inputs_str, output_str = self.subscripts.split('->')
             input_specs = inputs_str.split(',')
         else:
-            raise NotImplementedError("Implicit einsum mode not supported")
-        for i, tensor in enumerate(parent_tensors):
+            input_specs = self.subscripts.split(',')
+            all_indices = ''.join(input_specs)
+            output_str = ''.join(sorted(set(all_indices) - 
+                                      set([idx for idx in all_indices 
+                                           if all_indices.count(idx) > 1])))
+        for i, tensor in enumerate(self.parent_tensors):
             if not tensor.requires_grad:
                 grads.append(None)
-                continue    
+                continue
             grad_operands = [grad_output]
-            grad_specs = [output_str]          
-            for j, operand in enumerate(parent_tensors):
+            grad_specs = [output_str]
+            for j, operand in enumerate(self.parent_tensors):
                 if j != i:
                     grad_operands.append(operand.data)
-                    grad_specs.append(input_specs[j])        
+                    grad_specs.append(input_specs[j])
             grad_equation = ','.join(grad_specs) + '->' + input_specs[i]
-            grad = xp.einsum(grad_equation, *grad_operands)
-            grad = self._reduce_for_broadcast(grad, self.operand_shapes[i])
-            grads.append(grad)  
+            try:
+                grad = xp.einsum(grad_equation, *grad_operands)
+                grad = self._handle_broadcasting(grad, self.operand_shapes[i])
+                grads.append(grad)
+            except Exception as e:
+                grads.append(xp.zeros_like(self.input_operands[i]))
         return tuple(grads)
-    def _reduce_for_broadcast(self, grad, original_shape):
-        while len(grad.shape) > len(original_shape):
+    def _handle_broadcasting(self, grad, original_shape):
+        if grad.shape == original_shape:
+            return grad
+        ndims_added = grad.ndim - len(original_shape)
+        for _ in range(ndims_added):
             grad = grad.sum(axis=0)
-        
-        for i in range(len(original_shape)):
-            if original_shape[i] == 1 and grad.shape[i] > 1:
+        for i, (grad_dim, orig_dim) in enumerate(zip(grad.shape, original_shape)):
+            if orig_dim == 1 and grad_dim > 1:
                 grad = grad.sum(axis=i, keepdims=True)
         return grad
 

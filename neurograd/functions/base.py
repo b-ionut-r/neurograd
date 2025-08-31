@@ -4,10 +4,14 @@ import neurograd as ng
 from neurograd.tensor import Tensor
 from neurograd import xp
 from neurograd.utils.memory import maybe_log_op_memory
+from neurograd.amp.autocast import is_autocast_enabled
+from neurograd.amp.utils import maybe_cast_tensor
+
 
 
 class Function(ABC):
     name = None
+
     def __init__(self):
         self.parent_tensors: List[Tensor] = []
 
@@ -18,23 +22,16 @@ class Function(ABC):
                 processed_inputs.append(inp)
             else:
                 try:
-                    data = xp.array(inp)
+                    data = xp.asarray(inp)
                     processed_inputs.append(Tensor(data, requires_grad=False))
                 except Exception as e:
-                    raise TypeError(f"Input {i} must be convertible to numpy array, got {type(inp)}") from e
-        
-        # Apply autocast if enabled (but not for Cast operations to avoid recursion)
-        try:
-            from neurograd.amp.autocast import is_autocast_enabled
-            if is_autocast_enabled():
-                from neurograd.amp.utils import maybe_cast_tensor
-                op_name = getattr(self, 'name', None) or self.__class__.__name__
-                if op_name != 'Cast':  # Avoid recursion with Cast operations
-                    processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
-        except ImportError:
-            # AMP not available, continue with original precision
-            pass
-        
+                    raise TypeError(f"Input {i} must be convertible to xp array, got {type(inp)}") from e    
+        # AUTOCAST if enabled
+        op_name = getattr(self, 'name', None) or self.__class__.__name__
+        if is_autocast_enabled():
+            if op_name != 'Cast':  # Avoid recursion with Cast operations
+                processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
+        # Computations
         self.parent_tensors = processed_inputs
         output_data = self.forward(*[inp.data for inp in processed_inputs])
         requires_grad = any(inp.requires_grad for inp in processed_inputs)
@@ -43,13 +40,9 @@ class Function(ABC):
         if hasattr(self, "_memsave") and getattr(self, "memsave", False):
             self._memsave(self.parent_tensors, output)
         # Optional per-op memory logging (enabled only inside MemoryMonitor)
-        try:
-            op_name = getattr(self, 'name', None) or self.__class__.__name__
-            maybe_log_op_memory(op_name, self.parent_tensors, output_data)
-        except Exception:
-            pass
+        maybe_log_op_memory(op_name, self.parent_tensors, output_data)
         return output
-    
+
     @abstractmethod
     def forward(self, *inputs: xp.ndarray) -> xp.ndarray:
         """
@@ -67,28 +60,17 @@ class Function(ABC):
         """
         pass
 
-
     def _handle_broadcasting(self, grad: xp.ndarray, original_shape: tuple) -> xp.ndarray:
-        """
-        Handle broadcasting by summing gradients over broadcasted dimensions.
-        
-        Args:
-            grad: The gradient tensor that may have been broadcasted
-            original_shape: The original shape of the tensor before broadcasting
-            
-        Returns:
-            Gradient tensor with shape matching original_shape
-        """
         if grad is None:
             return None
-            
-        # Sum over dimensions that were added during broadcasting
-        while grad.ndim > len(original_shape):
-            grad = xp.sum(grad, axis=0) # sum
-        
-        # Sum over dimensions that were broadcasted (size 1 -> size N)
-        for i in range(len(original_shape)):
-            if original_shape[i] == 1 and grad.shape[i] > 1:
-                grad = xp.sum(grad, axis=i, keepdims=True)
-        
-        return grad
+        if grad.shape == original_shape:
+            return grad
+        # Left-pad original shape with 1s to align with grad.ndim
+        aligned_orig = (1,) * (grad.ndim - len(original_shape)) + tuple(original_shape)
+        # Axes where the original had size 1 (i.e., broadcasted) and grad expanded (>1)
+        axes = tuple(i for i, (g, o) in enumerate(zip(grad.shape, aligned_orig)) if o == 1 and g != 1)
+        if axes:
+            # Single fused reduction over all needed axes
+            grad = xp.sum(grad, axis=axes, keepdims=True, dtype=grad.dtype)
+        # Final reshape to the exact original shape
+        return grad.reshape(original_shape)

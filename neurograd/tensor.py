@@ -110,7 +110,6 @@ class Tensor:
                 if not is_leaf:  # Only clear grads for intermediate tensors
                     tensor.grad = None
 
-
     def cast(self, dtype):
         try: 
             # Check if already the correct dtype
@@ -306,10 +305,15 @@ class Tensor:
         from .functions.reductions import Min
         return Min(axis=axis, keepdims=keepdims)(self)
     
-    def std(self, axis=None, keepdims=False, ddof=0) -> 'Tensor':
+    def std(self, axis=None, keepdims=False) -> 'Tensor':
         """Standard deviation of tensor elements over given axis."""
         from .functions.reductions import Std
-        return Std(axis=axis, keepdims=keepdims, ddof=ddof)(self)
+        return Std(axis=axis, keepdims=keepdims)(self)
+    
+    def var(self, axis=None, keepdims=False) -> 'Tensor':
+        """Variance of tensor elements over given axis."""
+        from .functions.reductions import Var
+        return Var(axis=axis, keepdims=keepdims)(self)
 
     def argmin(self, axis=None) -> 'Tensor':
         """Indices of minimum values along an axis."""
@@ -415,11 +419,11 @@ class Tensor:
         from .functions.tensor_ops import Reshape
         return Reshape(new_shape=new_shape)(self)
 
-    def flatten(self) -> 'Tensor': # copy
+    def flatten(self, start_dim: int = 1, end_dim: int = -1) -> 'Tensor': # copy
         """Return a flattened 1D VIEW of the tensor, still attached to the computational graph."""
         from .functions.tensor_ops import Flatten
-        return Flatten()(self)
-    
+        return Flatten(start_dim=start_dim, end_dim=end_dim)(self)
+
     def squeeze(self, axis=None) -> 'Tensor':
         """Remove dimensions of size 1 from the tensor."""
         from .functions.tensor_ops import Squeeze

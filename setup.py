@@ -10,7 +10,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="neurograd",
-    version="1.6.4",
+    version="1.8.0",
     author="Bujor Ionut Raul",
     author_email="b-ionut-r@users.noreply.github.com",
     description="A Pure Python Deep Learning Framework with Automatic Differentiation",

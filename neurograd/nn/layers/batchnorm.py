@@ -8,7 +8,6 @@ class BatchNorm(Module):
         self.batch_momentum = batch_momentum
         self.epsilon = epsilon
         super().__init__()
-        
         self.add_parameter("mean_scaler", ng.zeros((1, num_features), dtype=ng.float32, requires_grad=True))
         self.add_parameter("std_scaler", ng.ones((1, num_features), dtype=ng.float32, requires_grad=True))
         self.add_buffer("running_mean", ng.zeros((1, num_features), dtype=ng.float32, requires_grad=False))
@@ -18,15 +17,12 @@ class BatchNorm(Module):
         if self.training:
             batch_mean = X.mean(axis=0, keepdims=True)
             batch_var = ((X - batch_mean) ** 2).mean(axis=0, keepdims=True)
-            
             # Update running stats
             self.running_mean.data = self.batch_momentum * self.running_mean.data + (1 - self.batch_momentum) * batch_mean.data
             self.running_var.data = self.batch_momentum * self.running_var.data + (1 - self.batch_momentum) * batch_var.data
-            
             X_norm = (X - batch_mean) / (batch_var + self.epsilon).sqrt()
         else:
-            X_norm = (X - self.running_mean) / (self.running_var + self.epsilon).sqrt()
-            
+            X_norm = (X - self.running_mean) / (self.running_var + self.epsilon).sqrt() 
         return self.std_scaler * X_norm + self.mean_scaler
 
 
@@ -37,7 +33,6 @@ class BatchNorm2D(Module):
         self.batch_momentum = batch_momentum
         self.epsilon = epsilon
         super().__init__()
-        
         self.add_parameter("mean_scaler", ng.zeros((1, num_features, 1, 1), dtype=ng.float32, requires_grad=True))
         self.add_parameter("std_scaler", ng.ones((1, num_features, 1, 1), dtype=ng.float32, requires_grad=True))
         self.add_buffer("running_mean", ng.zeros((1, num_features, 1, 1), dtype=ng.float32, requires_grad=False))
@@ -47,7 +42,6 @@ class BatchNorm2D(Module):
         if self.training:
             batch_mean = X.mean(axis=(0, 2, 3), keepdims=True)
             batch_var = ((X - batch_mean) ** 2).mean(axis=(0, 2, 3), keepdims=True)
-            
             # Update running stats
             self.running_mean.data = self.batch_momentum * self.running_mean.data + (1 - self.batch_momentum) * batch_mean.data
             self.running_var.data = self.batch_momentum * self.running_var.data + (1 - self.batch_momentum) * batch_var.data
@@ -55,5 +49,4 @@ class BatchNorm2D(Module):
             X_norm = (X - batch_mean) / (batch_var + self.epsilon).sqrt()
         else:
             X_norm = (X - self.running_mean) / (self.running_var + self.epsilon).sqrt()
-            
         return self.std_scaler * X_norm + self.mean_scaler

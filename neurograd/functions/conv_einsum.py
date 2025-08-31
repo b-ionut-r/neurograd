@@ -52,6 +52,7 @@ def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarr
             input,
             ((0, 0), (0, 0), (ph1, pad_h - ph1), (pw1, pad_w - pw1)),
             constant_values=padding_value,
+            memsave=True
         )
         
     if slider is None:
@@ -121,7 +122,8 @@ def pool2d(input: Union["Tensor", xp.ndarray],
         padding = [(0, 0), (0, 0), (ph1, pad_h - ph1), (pw1, pad_w - pw1)]
     else:
         padding = [(0, 0), (0, 0), (0, 0), (0, 0)]
-    input = ng.pad(input, pad_width=padding, mode='constant', constant_values=padding_value)
+    input = ng.pad(input, pad_width=padding, mode='constant', constant_values=padding_value,
+                   memsave=True)
 
     if slider is None:
         slider = SlidingWindowView(window_shape=(P_H, P_W), strides=strides, axes=(2, 3))

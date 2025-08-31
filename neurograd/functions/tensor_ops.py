@@ -3,10 +3,10 @@ from neurograd import xp
 from .base import Function
 from neurograd.nn.module import Module
 from typing import TYPE_CHECKING, Union, Tuple, Sequence
+import numpy as np
 from numpy.typing import ArrayLike
 if TYPE_CHECKING:
     from neurograd.tensor import Tensor
-import gc
 
 
 
@@ -24,17 +24,26 @@ class Reshape(Function, Module):
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         return xp.reshape(grad_output, self.original_shape) if A.requires_grad else None
-
-
+    
 class Flatten(Function, Module):
     name = "Flatten"
-    """Flatten tensor to 1D"""
-    def __init__(self):
+    """Flatten tensor with flexible dims"""
+    def __init__(self, start_dim: int = 1, end_dim: int = -1):
         Function.__init__(self)
         Module.__init__(self)
+        self.start_dim = start_dim
+        self.end_dim = end_dim
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        # Flatten all dimensions except the first (batch) dimension
-        return A.reshape(A.shape[0], -1)
+        # normalize dims
+        start = self.start_dim if self.start_dim >= 0 else len(A.shape) + self.start_dim
+        end   = self.end_dim   if self.end_dim   >= 0 else len(A.shape) + self.end_dim
+        # flatten [start..end] into a single dim
+        new_shape = (
+            A.shape[:start] +
+            (-1,) +
+            A.shape[end + 1:]
+        )
+        return A.reshape(new_shape)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         return grad_output.reshape(A.shape) if A.requires_grad else None
@@ -61,9 +70,7 @@ class ExpandDims(Function, Module):
         Function.__init__(self)
         Module.__init__(self)
         self.axis = axis
-        self.original_shape = None
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        self.original_shape = A.shape
         return xp.expand_dims(A, axis=self.axis)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
@@ -97,59 +104,51 @@ class Slice(Function, Module):
         Function.__init__(self)
         Module.__init__(self)
         self.key = key
-        self.input_shape = None
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        self.input_shape = A.shape
         return A[self.key]
     def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
         A = self.parent_tensors[0]
         if not A.requires_grad:
-            return (None,)
-        grad_input = xp.zeros(self.input_shape, dtype=grad_output.dtype)
+            return None
         # Accumulate gradients back to the sliced positions
+        grad_input = xp.zeros(A.shape, dtype=grad_output.dtype)
         grad_input[self.key] += grad_output
-        return (grad_input,)
+        return grad_input
+
 
 class Cast(Function):
     """
     Cast tensor to a different dtype while maintaining autograd graph
     """
     name = "Cast"
-    
     def __init__(self, target_dtype):
         super().__init__()
         self.target_dtype = target_dtype
         self.original_dtype = None
-    
     def forward(self, input_data: xp.ndarray) -> xp.ndarray:
-        """Forward pass: cast data to target dtype"""
         self.original_dtype = input_data.dtype
+        if self.original_dtype == self.target_dtype:
+            return input_data
         return input_data.astype(self.target_dtype, copy=False)
-    
-    def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
-        """Backward pass: cast gradient back to original dtype"""
-        input_tensor = self.parent_tensors[0]
-        
-        if input_tensor.requires_grad:
-            # Cast gradient back to original dtype for consistency
-            grad_input = grad_output.astype(self.original_dtype, copy=False)
-            return (grad_input,)
-        else:
-            return (None,)
+    def backward(self, grad_output: xp.ndarray):
+        x = self.parent_tensors[0]
+        if not x.requires_grad:
+            return None
+        if grad_output.dtype == self.original_dtype:
+            return grad_output
+        return grad_output.astype(self.original_dtype, copy=False) ### OOM ???
     
 
 class Pad(Function, Module):
     name = "Pad"
     """Pad tensor with zeros or specified value"""
-
-    def __init__(self, pad_width: Union[Sequence, ArrayLike, int], mode='constant',
-                 constant_values=0, memsave: bool = False, **kwargs):
+    def __init__(self, pad_width: Union[Sequence, ArrayLike, int], mode='constant', 
+                 constant_values=0, memsave=False, **kwargs):
         self.pad_width_input = pad_width
         self.mode = mode
         self.constant_values = constant_values
         self.kwargs = kwargs
         self.memsave = memsave
-
     def forward(self, A: xp.ndarray) -> xp.ndarray:
         # Normalize pad_width based on tensor dimensions
         if isinstance(self.pad_width_input, int):
@@ -158,11 +157,9 @@ class Pad(Function, Module):
             pad_width = [(p, p) for p in self.pad_width_input]
         else:
             pad_width = list(self.pad_width_input)
-
-        self.pad_width = pad_width  # store for later slicing
-        return xp.pad(A, pad_width=self.pad_width, mode=self.mode,
+        self.pad_width = pad_width
+        return xp.pad(A, pad_width=self.pad_width, mode=self.mode, 
                       constant_values=self.constant_values, **self.kwargs)
-
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         if not A.requires_grad:
@@ -174,7 +171,6 @@ class Pad(Function, Module):
             else:
                 slices.append(slice(lower, -upper))
         return grad_output[tuple(slices)]
-    
     # >>> new: returns the inner view (no copy) that matches the original input region
     def _memsave(self, parent_tensors: Sequence["Tensor"], output_tensor: "Tensor"):
         if not hasattr(self, "pad_width"):
@@ -192,20 +188,15 @@ class Clone(Function, Module):
     The backward pass is identity (passes gradients through unchanged).
     """
     name = "Clone"
-
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
-
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        # Ensure data is copied so storage is independent
-        return A.copy()
-
+        return A.copy() # underlying data copied
     def backward(self, grad_output: xp.ndarray) -> Tuple[xp.ndarray]:
         A = self.parent_tensors[0]
-        if A.requires_grad:
-            return (grad_output,)
-        return (None,)
+        return grad_output if A.requires_grad else None
+
 
 class SlidingWindowView(Function, Module):
     """
@@ -222,40 +213,30 @@ class SlidingWindowView(Function, Module):
                        tuple(strides for _ in range(len(self.axes)))
         self.window_shape = window_shape if isinstance(window_shape, tuple) else \
                            tuple(window_shape for _ in range(len(axes)))
-        self._grad_buffer = None
-        self._grad_view = None
-        
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        self.input_shape = A.shape
-        # Build slices
         slices = [slice(None)] * A.ndim
         for ax, stride in zip(self.axes, self.strides):
             slices[ax] = slice(None, None, stride)
         self.slices = tuple(slices)
         return xp.lib.stride_tricks.sliding_window_view(
             A, self.window_shape, self.axes)[self.slices]
-    
-    
     def backward(self, grad_output):
-        # Reuse gradient buffer if shape matches, otherwise create new
-        if self._grad_buffer is None or self._grad_buffer.shape != self.input_shape:
-            self._grad_buffer = xp.zeros(self.input_shape, dtype=grad_output.dtype)
-            # Cache the view as well
-            self._grad_view = xp.lib.stride_tricks.sliding_window_view(
-                self._grad_buffer, self.window_shape, self.axes)[self.slices]
-        else:
-            # Just zero out the existing buffer - much faster!
-            self._grad_buffer.fill(0)
+        A = self.parent_tensors[0]
+        grad_buffer = xp.zeros(A.shape, dtype=grad_output.dtype)
+        kwargs = {"writeable": True} if xp is np else {}
+        grad_view = xp.lib.stride_tricks.sliding_window_view(
+            grad_buffer, self.window_shape, self.axes, **kwargs
+        )[self.slices]
         # Accumulate gradients using cached view
-        self._grad_view += grad_output
-        return self._grad_buffer
+        grad_view += grad_output
+        return grad_buffer
 
 
 
 def reshape(A, new_shape):
     return Reshape(new_shape)(A)
-def flatten(A):
-    return Flatten()(A)
+def flatten(A, start_dim: int = 1, end_dim: int = -1):
+    return Flatten(start_dim, end_dim)(A)
 def squeeze(A, axis=None):
     return Squeeze(axis)(A)
 def expand_dims(A, axis):
@@ -265,7 +246,7 @@ def concat(tensors: Sequence["Tensor"], axis: int) -> "Tensor":
 def cast(A, target_dtype):
     return Cast(target_dtype)(A)
 def pad(A, pad_width, mode='constant', constant_values=0, memsave=False, **kwargs):
-    return Pad(pad_width, mode, constant_values, memsave, **kwargs)(A)
+    return Pad(pad_width, mode, constant_values, memsave=memsave, **kwargs)(A)
 def sliding_window_view(A, window_shape: Sequence[int], axes: Union[int, Tuple[int, ...]] = (2, 3), 
                         strides: Union[int, Tuple[int, ...]] = (1, 1)):
     return SlidingWindowView(window_shape, axes, strides)(A)
@@ -274,4 +255,3 @@ def clone(A):
 
 # newaxis constant for numpy-style indexing
 newaxis = None
-    

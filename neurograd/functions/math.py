@@ -1,3 +1,4 @@
+import neurograd as ng
 from neurograd import xp
 from .base import Function
 from neurograd.nn.module import Module
@@ -12,11 +13,13 @@ class Log(Function, Module):
         return xp.log(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output / x.data if x.requires_grad else None
-        return x_grad
+        return grad_output / x.data if x.requires_grad else None
 
 class Exp(Function, Module):
     name = "Exp"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output * xp.exp(x)
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -24,11 +27,13 @@ class Exp(Function, Module):
         return xp.exp(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output * xp.exp(x.data) if x.requires_grad else None
-        return x_grad
+        return Exp._fused_bw(grad_output, x.data) if x.requires_grad else None
     
 class Sqrt(Function, Module):
     name = "Sqrt"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output / (2 * xp.sqrt(x))
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -36,11 +41,13 @@ class Sqrt(Function, Module):
         return xp.sqrt(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output / (2 * xp.sqrt(x.data)) if x.requires_grad else None
-        return x_grad
-    
+        return Sqrt._fused_bw(grad_output, x.data) if x.requires_grad else None
+
 class Cbrt(Function, Module):
     name = "Cbrt"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output / (3 * xp.cbrt(x ** 2))
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -48,11 +55,13 @@ class Cbrt(Function, Module):
         return xp.cbrt(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output / (3 * xp.cbrt(x.data ** 2)) if x.requires_grad else None
-        return x_grad    
+        return Cbrt._fused_bw(grad_output, x.data) if x.requires_grad else None
     
 class Sin(Function, Module):
     name = "Sin"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output * xp.cos(x)
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -60,11 +69,13 @@ class Sin(Function, Module):
         return xp.sin(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output * xp.cos(x.data) if x.requires_grad else None
-        return x_grad
+        return Sin._fused_bw(grad_output, x.data) if x.requires_grad else None
 
 class Cos(Function, Module):
     name = "Cos"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return -grad_output * xp.sin(x)
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -72,11 +83,13 @@ class Cos(Function, Module):
         return xp.cos(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = -grad_output * xp.sin(x.data) if x.requires_grad else None
-        return x_grad
+        return Cos._fused_bw(grad_output, x.data) if x.requires_grad else None
 
 class Tan(Function, Module):
     name = "Tan"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output / (xp.cos(x) ** 2)
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -84,11 +97,13 @@ class Tan(Function, Module):
         return xp.tan(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output / (xp.cos(x.data) ** 2) if x.requires_grad else None
-        return x_grad
+        return Tan._fused_bw(grad_output, x.data) if x.requires_grad else None
 
 class Log10(Function, Module):
     name = "Log10"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output / (x * xp.log(10))
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -96,11 +111,13 @@ class Log10(Function, Module):
         return xp.log10(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output / (x.data * xp.log(10)) if x.requires_grad else None
-        return x_grad
-    
+        return Log10._fused_bw(grad_output, x.data) if x.requires_grad else None
+
 class Log2(Function, Module):
     name = "Log2"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output / (x * xp.log(2))
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -108,11 +125,13 @@ class Log2(Function, Module):
         return xp.log2(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output / (x.data * xp.log(2)) if x.requires_grad else None
-        return x_grad
-    
+        return Log2._fused_bw(grad_output, x.data) if x.requires_grad else None
+
 class Abs(Function, Module):
     name = "Abs"
+    @ng.fuse
+    def _fused_bw(grad_output, x):
+        return grad_output * xp.sign(x)
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
@@ -120,35 +139,32 @@ class Abs(Function, Module):
         return xp.abs(x)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
-        x_grad = grad_output * xp.sign(x.data) if x.requires_grad else None
-        return x_grad
-    
+        return Abs._fused_bw(grad_output, x.data) if x.requires_grad else None
+
 class Clip(Function, Module):
     name = "Clip"
+    @ng.fuse
+    def _fused_bw(grad_output, x, min_v, max_v):
+        mask = ((x >= min_v) & (x <= max_v))
+        return grad_output * mask
     def __init__(self, min_val=None, max_val=None):
         Function.__init__(self)
         Module.__init__(self)
         self.min_val = min_val
         self.max_val = max_val
-        
+    def _bounds(self):
+        min_v = self.min_val if self.min_val is not None else -xp.inf
+        max_v = self.max_val if self.max_val is not None else  xp.inf
+        return min_v, max_v
     def forward(self, x: xp.ndarray) -> xp.ndarray:
-        return xp.clip(x, self.min_val, self.max_val)
-        
+        min_v, max_v = self._bounds()
+        return xp.clip(x, min_v, max_v)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
         if not x.requires_grad:
             return None
-        
-        # Gradient is 1 where x is within bounds, 0 where it's clipped
-        mask = xp.ones_like(x.data)
-        if self.min_val is not None:
-            mask = mask * (x.data >= self.min_val)
-        if self.max_val is not None:
-            mask = mask * (x.data <= self.max_val)
-        
-        x_grad = grad_output * mask
-        return x_grad
-    
+        min_v, max_v = self._bounds()
+        return Clip._fused_bw(grad_output, x.data, min_v, max_v)
 
 # Convenience functions for arithmetic operations
 # These functions are designed to be used directly with Tensor objects.
