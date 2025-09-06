@@ -21,7 +21,7 @@ elif DEVICE == "cuda":
                 check=True
             )
     # Set accelerators
-    os.environ["CUPY_ACCELERATORS"] = "cub,cutensor"  # or "cub,cutensor" if you want both
+    os.environ["CUPY_ACCELERATORS"] = "cub,cutensor,cutensornet"  # or "cub,cutensor" if you want both
     import cupy as xp
     # xp.cuda.set_allocator(None)  # Use default memory pool
     # xp.cuda.set_pinned_memory_allocator(None)  # Use default pinned memory pool

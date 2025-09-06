@@ -110,14 +110,15 @@ class TensorDot(Function, Module):
 
 class EinSum(Function, Module):
     name = "EinSum"
-    def __init__(self, subscripts: str):
+    def __init__(self, subscripts: str, optimize = False):
         Function.__init__(self)
         Module.__init__(self)
         self.subscripts = subscripts.replace(" ", "")
+        self.optimize = optimize
     def forward(self, *operands: xp.ndarray) -> xp.ndarray:
         self.operand_shapes = [op.shape for op in operands]
         self.input_operands = operands
-        return xp.einsum(self.subscripts, *operands)   
+        return xp.einsum(self.subscripts, *operands, optimize=self.optimize)   
     def backward(self, grad_output: xp.ndarray):
         grads = []
         if '->' in self.subscripts:
@@ -141,7 +142,7 @@ class EinSum(Function, Module):
                     grad_specs.append(input_specs[j])
             grad_equation = ','.join(grad_specs) + '->' + input_specs[i]
             try:
-                grad = xp.einsum(grad_equation, *grad_operands)
+                grad = xp.einsum(grad_equation, *grad_operands, optimize=self.optimize)
                 grad = self._handle_broadcasting(grad, self.operand_shapes[i])
                 grads.append(grad)
             except Exception as e:
@@ -189,7 +190,7 @@ def dot(A, B):
     return MatMul()(A, B)
 def tensordot(A, B, axes):
     return TensorDot(axes)(A, B)
-def einsum(subscripts: str, *operands: xp.ndarray) -> xp.ndarray:
-    return EinSum(subscripts)(*operands)
+def einsum(subscripts: str, *operands: xp.ndarray, optimize = False) -> xp.ndarray:
+    return EinSum(subscripts, optimize=optimize)(*operands)
 def transpose(A, axes=None):
     return Transpose(axes)(A)
