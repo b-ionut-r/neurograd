@@ -336,3 +336,57 @@ def f1_score(y_true: Tensor, y_pred: Tensor, average='macro'):
             return accuracy_score(y_true, y_pred)
         else:
             raise ValueError("average must be 'macro' or 'micro'")
+
+
+def top_k_accuracy_score(y_true: Tensor, y_pred_scores: Tensor, k: int = 1):
+    """
+    Compute Top-k accuracy for multi-class predictions.
+
+    Expects `y_pred_scores` of shape (N, C) with class scores/logits and
+    `y_true` of shape (N,) with integer class indices. Counts a prediction as
+    correct if the true label is among the top-k scores.
+
+    Parameters:
+    y_true: True class indices (Tensor or array-like), shape (N,)
+    y_pred_scores: Predicted scores/logits (Tensor or array-like), shape (N, C)
+    k: Top-k (e.g., 1, 3, 5)
+
+    Returns:
+    float: Top-k accuracy between 0.0 and 1.0
+    """
+    # Minimal conversions, following template of other metrics
+    if isinstance(y_true, Tensor):
+        y_true = y_true.data
+    if isinstance(y_pred_scores, Tensor):
+        y_pred_scores = y_pred_scores.data
+
+    # Clamp k to number of classes
+    num_classes = y_pred_scores.shape[1]
+    k = int(k)
+    if k < 1:
+        k = 1
+    if k > num_classes:
+        k = num_classes
+
+    # Get top-k indices per row using argpartition (no need to sort fully)
+    # Use negative scores to select largest values
+    topk_idx = xp.argpartition(-y_pred_scores, kth=k - 1, axis=1)[:, :k]
+
+    # Compare true labels with top-k predictions
+    correct = xp.any(topk_idx == y_true.reshape(-1, 1), axis=1)
+    return xp.mean(correct).item()
+
+
+def top_k_accuracies(y_true: Tensor, y_pred_scores: Tensor, ks=(1, 3, 5)):
+    """
+    Convenience helper to compute multiple Top-k accuracies at once.
+
+    Parameters:
+    y_true: True class indices (Tensor or array-like), shape (N,)
+    y_pred_scores: Predicted scores/logits (Tensor or array-like), shape (N, C)
+    ks: Iterable of k values (e.g., (1, 3, 5))
+
+    Returns:
+    list[float]: Top-k accuracies corresponding to each k in `ks`.
+    """
+    return [top_k_accuracy_score(y_true, y_pred_scores, int(k)) for k in ks]
