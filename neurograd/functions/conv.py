@@ -57,15 +57,14 @@ def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarr
         
     # Create a fresh sliding window view op per call
     slider = SlidingWindowView(window_shape=(F_H, F_W), strides=strides, axes=(2, 3))
-    if not depthwise: # tensordot path more memory efficient for standard conv
+    if not depthwise:
         slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)
         filters = filters # (F_N, C, F_H, F_W)
-        output = ng.tensordot(slides, filters, axes=[[1, 4, 5], [1, 2, 3]])  # (N, out_H, out_W, F_N)
-        output = ng.transpose(output, axes=(0, 3, 1, 2))  # (N, F_N, out_H, out_W)
-    else: # einsum path more memory efficient for depthwise conv
+        output = ng.einsum("ncpqhw,fchw->nfpq", slides, filters) # (N, F_N, out_H, out_W) 
+    else:
         slides = slider(input)  # (N, C, out_H, out_W, F_H, F_W)
         filters = filters # (C, F_H, F_W)
-        output = ng.einsum('ncpqhw,chw->ncpq', slides, filters) # (N, C, out_H, out_W)
+        output = ng.einsum('ncpqhw,chw->ncpq', slides, filters)
 
     return output
 

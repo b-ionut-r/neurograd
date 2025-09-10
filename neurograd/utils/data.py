@@ -3,7 +3,7 @@ import math
 import random
 import os
 import cv2
-cv2.setNumThreads(1)
+# cv2.setNumThreads(1)
 import numpy as np
 from neurograd import xp
 from typing import Optional
