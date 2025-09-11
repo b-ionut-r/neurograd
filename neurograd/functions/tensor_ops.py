@@ -171,7 +171,7 @@ class Pad(Function, Module):
         if not hasattr(self, "pad_width"):
             raise RuntimeError("pad_width not set; call forward() first.")
         del parent_tensors[0].data  # free parent tensor data to save memory
-        # ng.flush(gc=False)
+        ng.flush(gc=False)
         slices = tuple(slice(l, None if u == 0 else -u) for (l, u) in self.pad_width)
         parent_tensors[0].data = output_tensor.data[slices]
 
