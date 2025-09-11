@@ -2,6 +2,7 @@
 numpy>=1.19.0
 albumentations
 cloudpickle>=2.0.0
+opt_einsum>=3.0.0
 
 # Image I/O (use OpenCV instead of Pillow)
 opencv-python-headless>=4.7.0
