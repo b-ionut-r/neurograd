@@ -1,10 +1,14 @@
 """
-Lightweight, opt-in GPU memory monitor.
+Lightweight, opt-in GPU memory and performance monitor.
 
 Usage:
     from neurograd.utils.memory import MemoryMonitor
     with MemoryMonitor():
         # run code; each NeuroGrad op logs a one-line memory snapshot
+    
+    # Enable both memory and timing:
+    with MemoryMonitor(include_timing=True):
+        # run code; each op logs memory + execution time
 
 Default off: When not inside the context, overhead is near-zero
 (a single boolean check per op).
@@ -13,11 +17,13 @@ Notes:
 - On CUDA (CuPy), prints driver used VRAM, CuPy pool used/total, and optional FFT
   plan cache info if available.
 - On CPU (NumPy), logs only the op tag without memory figures.
+- Timing uses CUDA events for GPU operations and perf_counter for CPU operations.
 """
 
 from __future__ import annotations
 
 import threading
+import time
 from typing import Callable, Iterable, Optional, Dict, Any
 
 
@@ -28,6 +34,8 @@ _TLS.prefix = "[OP]"
 _TLS.include_driver = True
 _TLS.include_pool = True
 _TLS.include_fft = False
+_TLS.include_timing = False
+_TLS.timing_context = {}  # Store timing-related state
 
 
 def _get_backend() -> str:
@@ -41,6 +49,78 @@ def _get_backend() -> str:
 
 def _fmt_gb(x: float) -> str:
     return f"{x/1e9:.2f} GB"
+
+
+def _fmt_time_ms(t: float) -> str:
+    """Format time in milliseconds with appropriate precision."""
+    if t < 0.001:
+        return f"{t*1e6:.1f} μs"
+    elif t < 1.0:
+        return f"{t*1e3:.2f} ms"
+    else:
+        return f"{t*1e3:.1f} ms"
+
+
+def _create_timing_context():
+    """Create timing context for GPU or CPU measurements."""
+    backend = _get_backend()
+    if backend == "cuda":
+        try:
+            import cupy as cp
+            # Use simple synchronization approach for more reliable timing
+            return {
+                'backend': 'cuda',
+                'start_time': None,
+                'stream': cp.cuda.get_current_stream()
+            }
+        except Exception:
+            pass
+    
+    # Fallback to CPU timing
+    return {
+        'backend': 'cpu',
+        'start_time': None
+    }
+
+
+def _start_timing():
+    """Start timing measurement. Returns timing context or None if timing disabled."""
+    if not getattr(_TLS, 'include_timing', False):
+        return None
+    
+    context = _create_timing_context()
+    
+    if context['backend'] == 'cuda':
+        try:
+            # Synchronize before starting to ensure accurate timing
+            context['stream'].synchronize()
+            context['start_time'] = time.perf_counter()
+            return context
+        except Exception:
+            # Fallback to CPU timing
+            context = {'backend': 'cpu', 'start_time': time.perf_counter()}
+    
+    if context['backend'] == 'cpu':
+        context['start_time'] = time.perf_counter()
+    
+    return context
+
+
+def _end_timing(timing_context) -> Optional[float]:
+    """End timing measurement and return elapsed time in seconds."""
+    if timing_context is None:
+        return None
+    
+    try:
+        if timing_context['backend'] == 'cuda':
+            # Synchronize before ending to ensure all operations completed
+            timing_context['stream'].synchronize()
+            return time.perf_counter() - timing_context['start_time']
+        else:
+            # CPU timing
+            return time.perf_counter() - timing_context['start_time']
+    except Exception:
+        return None
 
 
 def _gpu_stats() -> Optional[str]:
@@ -85,9 +165,22 @@ def is_enabled() -> bool:
     return bool(getattr(_TLS, "enabled", False))
 
 
-def maybe_log_op_memory(op_name: str, inputs: Iterable, output) -> None:
+def start_op_timing() -> Optional[Any]:
+    """Start timing for an operation. Returns timing context or None if timing disabled."""
+    if not is_enabled():
+        return None
+    return _start_timing()
+
+
+def maybe_log_op_memory(op_name: str, inputs: Iterable, output, timing_context=None) -> None:
     """
     Fast no-op when disabled. Called by the Function machinery after each op.
+    
+    Args:
+        op_name: Name of the operation
+        inputs: Input tensors
+        output: Output tensor/data
+        timing_context: Optional timing context from start_op_timing()
     """
     if not is_enabled():
         return
@@ -104,14 +197,40 @@ def maybe_log_op_memory(op_name: str, inputs: Iterable, output) -> None:
                 in_shapes.append(())
         out_shape = None
         try:
-            out_shape = tuple(getattr(output, "shape", ()))
+            # Handle single output
+            if hasattr(output, "shape"):
+                out_shape = tuple(getattr(output, "shape", ()))
+            # Handle multiple outputs (like backward passes)
+            elif isinstance(output, (tuple, list)):
+                out_shapes = []
+                for o in output:
+                    try:
+                        if o is not None:
+                            out_shapes.append(tuple(getattr(o, "shape", ())))
+                        else:
+                            out_shapes.append(None)
+                    except Exception:
+                        out_shapes.append(())
+                out_shape = out_shapes if len(out_shapes) > 1 else (out_shapes[0] if out_shapes else ())
+            else:
+                out_shape = ()
         except Exception:
             out_shape = ()
 
-        gpu = _gpu_stats()
+        # Build the message
         msg = f"{prefix} {op_name}: in={in_shapes} -> out={out_shape}"
+        
+        # Add timing information if available
+        if timing_context is not None:
+            elapsed = _end_timing(timing_context)
+            if elapsed is not None:
+                msg += f" | time={_fmt_time_ms(elapsed)}"
+        
+        # Add memory information
+        gpu = _gpu_stats()
         if gpu:
             msg += f" | {gpu}"
+            
         pf(msg)
     except Exception:
         # Never let diagnostics break the main path
@@ -119,7 +238,7 @@ def maybe_log_op_memory(op_name: str, inputs: Iterable, output) -> None:
 
 
 class MemoryMonitor:
-    """Context manager to enable per-op memory logging."""
+    """Context manager to enable per-op memory and performance logging."""
 
     def __init__(
         self,
@@ -129,13 +248,26 @@ class MemoryMonitor:
         include_driver: bool = True,
         include_pool: bool = True,
         include_fft: bool = False,
+        include_timing: bool = False,
     ) -> None:
+        """
+        Initialize MemoryMonitor.
+        
+        Args:
+            print_fn: Custom print function for output
+            prefix: Prefix for log messages
+            include_driver: Include GPU driver memory stats
+            include_pool: Include CuPy memory pool stats  
+            include_fft: Include FFT plan cache stats
+            include_timing: Include operation timing measurements
+        """
         self._prev = {}
         self.print_fn = print_fn or print
         self.prefix = prefix
         self.include_driver = include_driver
         self.include_pool = include_pool
         self.include_fft = include_fft
+        self.include_timing = include_timing
 
     def __enter__(self):
         self._prev = {
@@ -145,6 +277,7 @@ class MemoryMonitor:
             "include_driver": getattr(_TLS, "include_driver", True),
             "include_pool": getattr(_TLS, "include_pool", True),
             "include_fft": getattr(_TLS, "include_fft", False),
+            "include_timing": getattr(_TLS, "include_timing", False),
         }
         _TLS.enabled = True
         _TLS.print_fn = self.print_fn  # type: ignore
@@ -152,6 +285,7 @@ class MemoryMonitor:
         _TLS.include_driver = self.include_driver
         _TLS.include_pool = self.include_pool
         _TLS.include_fft = self.include_fft
+        _TLS.include_timing = self.include_timing
         return self
 
     def __exit__(self, exc_type, exc, tb):

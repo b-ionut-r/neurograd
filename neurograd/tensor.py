@@ -10,6 +10,8 @@ class Tensor:
     def __init__(self, data, requires_grad: bool = False,
                  grad_fn: Optional[Callable] = None, name: Optional[str] = None,
                  dtype: Optional[str] = None):
+        if isinstance(data, Tensor):
+            return data  # Avoid wrapping a Tensor in another Tensor
         if not isinstance(data, xp.ndarray):
             self.data = xp.array(data, dtype=dtype) if dtype else xp.array(data)
         elif dtype is not None:
@@ -86,7 +88,11 @@ class Tensor:
             grad_output = tensor.grad
             
             # Compute gradients w.r.t. parent tensors
+            from neurograd.utils.memory import start_op_timing, maybe_log_op_memory
+            op_name = getattr(tensor.grad_fn, 'name', None) or tensor.grad_fn.__class__.__name__
+            timing_context = start_op_timing()
             parent_grads = tensor.grad_fn.backward(grad_output)
+            maybe_log_op_memory(f"{op_name}_bwd", [grad_output], parent_grads, timing_context)
             
             # Handle single gradient return (convert to tuple)
             if not isinstance(parent_grads, tuple):
@@ -164,6 +170,37 @@ class Tensor:
     def get_dtype(self):
         """Get the dtype of the tensor"""
         return self.data.dtype
+    
+
+    
+    def to(self, device):
+        """Move tensor to specified device ('cpu' or 'cuda')."""
+        if device == self.device:
+            return self
+            
+        if device == 'cpu':
+            # Move to CPU
+            if xp is not real_np:  # Currently on GPU
+                import cupy as cp
+                cpu_data = cp.asnumpy(self.data)
+                return Tensor(cpu_data, requires_grad=self.requires_grad,
+                            grad_fn=self.grad_fn, name=f"{self.name}_cpu")
+            else:
+                return self  # Already on CPU
+        elif device == 'cuda':
+            # Move to GPU
+            if xp is real_np:  # Currently on CPU
+                try:
+                    import cupy as cp
+                    gpu_data = cp.asarray(self.data)
+                    return Tensor(gpu_data, requires_grad=self.requires_grad,
+                                grad_fn=self.grad_fn, name=f"{self.name}_cuda")
+                except ImportError:
+                    raise RuntimeError("CuPy not available. Cannot move tensor to CUDA.")
+            else:
+                return self  # Already on GPU
+        else:
+            raise ValueError(f"Unsupported device: {device}. Use 'cpu' or 'cuda'.")
          
     
     def zero_grad(self):

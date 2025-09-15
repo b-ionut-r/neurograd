@@ -4,5 +4,8 @@ albumentations
 cloudpickle>=2.0.0
 opt_einsum>=3.0.0
 
-# Image I/O (use OpenCV instead of Pillow)
+# Image I/O and processing
 opencv-python-headless>=4.7.0
+Pillow>=10.0.0
+multiprocess
+

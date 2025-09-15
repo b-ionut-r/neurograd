@@ -7,4 +7,4 @@ from .reductions import Sum, Mean, Max, Min, Std, Var, sum, mean, max, min, std,
 from .activations import ReLU, LeakyReLU, ReLU6, Sigmoid, Softmax, Tanh, relu, leaky_relu, relu6, sigmoid, softmax, tanh
 from .normalize import BatchNormalizer, batch_normalize 
 from .base import Function
-from .conv import conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d
+from .conv import Convolver, conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d

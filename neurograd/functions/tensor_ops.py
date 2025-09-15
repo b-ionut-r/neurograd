@@ -136,7 +136,7 @@ class Cast(Function):
 
 class Pad(Function, Module):
     name = "Pad"
-    """Pad tensor with zeros or specified value"""
+    """Pad tensor with zeros or specified value (optimized for constant padding)"""
     def __init__(self, pad_width: Union[Sequence, ArrayLike, int], mode='constant', 
                  constant_values=0, memsave=False, **kwargs):
         self.pad_width_input = pad_width
@@ -145,7 +145,7 @@ class Pad(Function, Module):
         self.kwargs = kwargs
         self.memsave = memsave
     def forward(self, A: xp.ndarray) -> xp.ndarray:
-        # Normalize pad_width based on tensor dimensions
+        # Normalize pad_width
         if isinstance(self.pad_width_input, int):
             pad_width = [(self.pad_width_input, self.pad_width_input)] * A.ndim
         elif isinstance(self.pad_width_input, Sequence) and isinstance(self.pad_width_input[0], int):
@@ -153,25 +153,29 @@ class Pad(Function, Module):
         else:
             pad_width = list(self.pad_width_input)
         self.pad_width = pad_width
-        return xp.pad(A, pad_width=self.pad_width, mode=self.mode, 
-                      constant_values=self.constant_values, **self.kwargs)
+        # Optimized constant zero-padding
+        if self.mode == "constant" and self.constant_values == 0:
+            # optimized zero-padding
+            new_shape = tuple(A.shape[i] + sum(pad) for i, pad in enumerate(pad_width))
+            B = xp.zeros(new_shape, dtype=A.dtype)
+            slices = tuple(slice(l, l + A.shape[i]) for i, (l, _) in enumerate(pad_width))
+            B[slices] = A
+            return B
+        else:
+            # fallback to general xp.pad
+            return xp.pad(A, pad_width=self.pad_width, mode=self.mode, 
+                          constant_values=self.constant_values, **self.kwargs)
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
         if not A.requires_grad:
             return None
-        slices = []
-        for lower, upper in self.pad_width:
-            if upper == 0:
-                slices.append(slice(lower, None))
-            else:
-                slices.append(slice(lower, -upper))
-        return grad_output[tuple(slices)]
-    # >>> new: returns the inner view (no copy) that matches the original input region
+        slices = tuple(slice(l, None if u == 0 else -u) for (l, u) in self.pad_width)
+        return grad_output[slices]
     def _memsave(self, parent_tensors: Sequence["Tensor"], output_tensor: "Tensor"):
         if not hasattr(self, "pad_width"):
             raise RuntimeError("pad_width not set; call forward() first.")
-        del parent_tensors[0].data  # free parent tensor data to save memory
-        ng.flush(gc=False)
+        del parent_tensors[0].data
+        # ng.flush(gc=False)
         slices = tuple(slice(l, None if u == 0 else -u) for (l, u) in self.pad_width)
         parent_tensors[0].data = output_tensor.data[slices]
 
@@ -218,6 +222,8 @@ class SlidingWindowView(Function, Module):
             A, self.window_shape, self.axes)[self.slices]
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         A = self.parent_tensors[0]
+        if not A.requires_grad:
+            return None
         grad_buffer = xp.zeros(A.shape, dtype=grad_output.dtype)
         kwargs = {"writeable": True} if xp is np else {}
         grad_view = xp.lib.stride_tricks.sliding_window_view(

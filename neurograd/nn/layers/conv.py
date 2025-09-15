@@ -18,7 +18,8 @@ class Conv2D(Module):
                 weights_initializer = "he", bias_initializer = "zeros",
                 activation = "passthrough", dropout = 0.0, 
                 batch_normalization = False, batch_momentum = 0.9,
-                use_bias = True, dtype = None):
+                use_bias = True, dtype = None, 
+                backend: Literal["xp", "cudnn"] = "cudnn"):
         
         if not out_channels and not depthwise:
             raise ValueError("`out_channels` must be specified for standard convolution.")
@@ -59,6 +60,8 @@ class Conv2D(Module):
         self.batch_momentum = batch_momentum
         self.use_bias = use_bias
         self.dtype = dtype
+        self.backend = backend
+        self.convolver = None
         
         # Super init before adding parameters
         super().__init__()
@@ -75,13 +78,28 @@ class Conv2D(Module):
             self.add_parameter(name="bias", param=self.bias_initializer.generate((1, out_channels, 1, 1)))
 
 
-
-
     def forward(self, X):
-        from neurograd import conv2d
         X = X.cast(self.dtype) if self.dtype else X
-        Z = conv2d(X, self.kernels, self.strides, self.padding, self.padding_value, 
-                   depthwise=self.depthwise)
+        # Convolve
+        from neurograd.functions.conv import Convolver, CUDNN_AVAILABLE
+        from neurograd import conv2d
+        if self.backend == "cudnn" and CUDNN_AVAILABLE:
+            try:
+                if self.convolver is None:
+                    self.convolver = Convolver(self.strides, self.padding, depthwise=self.depthwise)
+                Z = self.convolver(X, self.kernels)
+            except Exception as e:
+                import traceback
+                print(f"cuDNN Convolver failed: {e}. Falling back to regular conv2d.")
+                print("Full traceback:")
+                traceback.print_exc()
+                Z = conv2d(X, self.kernels, self.strides, self.padding, 
+                        self.padding_value, depthwise=self.depthwise)
+                self.backend = "xp"  # Switch to xp backend after failure
+        else:
+            Z = conv2d(X, self.kernels, self.strides, self.padding, 
+                    self.padding_value, depthwise=self.depthwise)
+        # Add bias if needed
         if self.use_bias:
             Z += self.bias
         # Apply BatchNorm if needed

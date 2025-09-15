@@ -28,7 +28,7 @@ class GradientChecker:
 
         # Numerical gradient checking
         ok = True
-        for name, param in module.named_parameters():
+        for name, param in reversed(list(module.named_parameters())):
             if param.requires_grad and param.grad is not None:
                 # Create actual copies, not views
                 param_flat = param.data.flatten().copy()
@@ -103,7 +103,7 @@ def gradient_check(model: Module, X: Union[Tensor, xp.ndarray], y: Union[Tensor,
 
 
 
-def check_vanishing_grads(model: Module, tol: float = 1e-8):
+def check_nan_grads(model: Module, tol: float = 1e-8):
     """
     Inspect existing gradients on `model` and report vanishing/NaN stats.
     Assumes you've already called backward().

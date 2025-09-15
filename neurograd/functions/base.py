@@ -3,7 +3,7 @@ from typing import List, Tuple
 import neurograd as ng
 from neurograd.tensor import Tensor
 from neurograd import xp
-from neurograd.utils.memory import maybe_log_op_memory
+from neurograd.utils.memory import maybe_log_op_memory, start_op_timing
 from neurograd.utils.no_grad import is_grad_enabled
 from neurograd.amp.autocast import is_autocast_enabled
 from neurograd.amp.utils import maybe_cast_tensor
@@ -32,6 +32,10 @@ class Function(ABC):
         if is_autocast_enabled():
             if op_name != 'Cast':  # Avoid recursion with Cast operations
                 processed_inputs = [maybe_cast_tensor(inp, op_name=op_name) for inp in processed_inputs]
+        
+        # Start timing if profiling is enabled
+        timing_context = start_op_timing()
+        
         # Computations
         grad_on = is_grad_enabled()
         if grad_on:
@@ -45,8 +49,8 @@ class Function(ABC):
         parents_for_hooks = self.parent_tensors if grad_on else processed_inputs
         if hasattr(self, "_memsave") and getattr(self, "memsave", False):
             self._memsave(parents_for_hooks, output)
-        # Optional per-op memory logging (enabled only inside MemoryMonitor)
-        maybe_log_op_memory(op_name, parents_for_hooks, output_data)
+        # Optional per-op memory and timing logging (enabled only inside MemoryMonitor)
+        maybe_log_op_memory(f"{op_name}_fwd", parents_for_hooks, output_data, timing_context)
         return output
 
     @abstractmethod
