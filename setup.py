@@ -10,7 +10,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="neurograd",
-    version="4.6.6",
+    version="5.2.9",
     author="Bujor Ionut Raul",
     author_email="b-ionut-r@users.noreply.github.com",
     description="A Pure Python Deep Learning Framework with Automatic Differentiation",
@@ -72,6 +72,7 @@ setup(
             "cuquantum-cu12>=24.3.0",
             "cuquantum-python-cu12>=24.3.0",
             "nvidia-dali-cuda120; platform_system=='Linux'",
+            "cutensor-cu12",
             "datasets>=2.0.0",
             "multiprocess>=0.70.0",
             "matplotlib>=3.3.0",

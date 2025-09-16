@@ -30,18 +30,21 @@ class Tensor:
         self.dtype = dtype or self.data.dtype
 
 
-    def backward(self, grad = None, retain_graph: bool = False):
+    def backward(self, grad=None, retain_graph: bool = False, preserve_ancestors: int = 4):
         """
         Compute gradients using automatic differentiation.
         
         Args:
             grad: Initial gradient. If None, assumes scalar output (gradient of 1).
             retain_graph: If True, the graph is retained for multiple backward passes.
+            preserve_ancestors: If > 0, preserves the .data attribute for the final `n`
+                                intermediate tensors in the graph before the output.
+                                This is useful for accessing their values (e.g., for metrics)
+                                after the backward pass, at the cost of memory.
         """
         if not self.requires_grad:
             raise RuntimeError("Cannot do backprop for a tensor that does not require grad.")
         
-        # Check if this is a scalar (for default case)
         if grad is None:
             if self.data.size != 1:
                 raise RuntimeError(
@@ -55,66 +58,67 @@ class Tensor:
         visited = set()
         
         def build_topo(tensor):
-            if id(tensor) in visited:
-                return
+            if id(tensor) in visited: return
             visited.add(id(tensor))
-            
-            # Only process if this tensor has a grad_fn (not a leaf)
             if tensor.grad_fn is not None:
-                # Visit all parent tensors first
                 for parent in tensor.grad_fn.parent_tensors:
                     if parent.requires_grad:
                         build_topo(parent)
-                
                 topo_order.append(tensor)
         
-        # Build topological ordering starting from self
         build_topo(self)
         
-        # Initialize gradient for the output tensor
+        # --- NEW LOGIC: Identify which nodes to preserve based on the new parameter ---
+        nodes_to_preserve = set()
+        if preserve_ancestors > 0 and topo_order:
+            # Get the last 'preserve_ancestors' tensors from the sorted list.
+            # These are the tensors closest to the output tensor `self`.
+            preserved_tensors = topo_order[-preserve_ancestors:]
+            nodes_to_preserve = {id(t) for t in preserved_tensors}
+        # --- END NEW LOGIC ---
+
         if self.grad is None:
             self.grad = grad
         else:
-            # self.grad = self.grad + grad
             xp.add(self.grad, grad, out=self.grad)
         
-        # Backpropagate in reverse topological order
         for tensor in reversed(topo_order):
-            # Skip if no gradient function (shouldn't happen due to build_topo logic)
-            if tensor.grad_fn is None:
-                continue
+            if tensor.grad_fn is None: continue
                 
-            # Get gradient w.r.t. this tensor
             grad_output = tensor.grad
             
-            # Compute gradients w.r.t. parent tensors
             from neurograd.utils.memory import start_op_timing, maybe_log_op_memory
             op_name = getattr(tensor.grad_fn, 'name', None) or tensor.grad_fn.__class__.__name__
             timing_context = start_op_timing()
             parent_grads = tensor.grad_fn.backward(grad_output)
             maybe_log_op_memory(f"{op_name}_bwd", [grad_output], parent_grads, timing_context)
             
-            # Handle single gradient return (convert to tuple)
             if not isinstance(parent_grads, tuple):
                 parent_grads = (parent_grads,)
             
-            # Accumulate gradients for parent tensors
             for parent_tensor, parent_grad in zip(tensor.grad_fn.parent_tensors, parent_grads):
                 if parent_tensor.requires_grad and parent_grad is not None:
                     if parent_tensor.grad is None:
                         parent_tensor.grad = parent_grad
                     else:
-                        # parent_tensor.grad = parent_tensor.grad + parent_grad
                         xp.add(parent_tensor.grad, parent_grad, out=parent_tensor.grad)
             
-            # Clear intermediate results to save memory (unless retaining graph)
+            # --- MODIFIED MEMORY CLEARING LOGIC ---
             if not retain_graph:
-                # Clear gradient for intermediate tensors (non-leaf nodes) 
-                # Leaf tensors (weights/biases) keep their gradients for optimizer
-                is_leaf = tensor.grad_fn is None  # Check before clearing grad_fn
+                is_leaf = tensor.grad_fn is None
+                # Check if the current tensor's ID is in the set of nodes to preserve.
+                is_preserved = id(tensor) in nodes_to_preserve
+
                 tensor.grad_fn = None
-                if not is_leaf:  # Only clear grads for intermediate tensors
+                
+                # Only clear data for intermediate tensors that are not marked for preservation.
+                if not is_leaf and not is_preserved:
                     tensor.grad = None
+                    # Note: We don't clear `self` (the tensor backward is called on), but
+                    # `self` is never in topo_order, so this check is implicitly handled.
+                    tensor.data = None
+            # --- END MODIFIED LOGIC ---
+
 
     def cast(self, dtype):
         try: 

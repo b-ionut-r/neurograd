@@ -15,8 +15,6 @@ if xp is not np:
 
 
 
-
-
 # Implementation with cuDNN backend
 class Convolver(Function):
     """2D Convolution operation using cuDNN backend for GPU acceleration."""

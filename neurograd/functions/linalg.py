@@ -41,7 +41,7 @@ class Linear(Function, Module):
     def __init__(self):
         Function.__init__(self)
         Module.__init__(self)
-    def forward(self, X: xp.ndarray, W: xp.ndarray, b: xp.ndarray) -> xp.ndarray:
+    def forward(self, X: xp.ndarray, W: xp.ndarray, b: xp.ndarray=0) -> xp.ndarray:
         out = xp.matmul(X, W)
         xp.add(out, b, out=out)
         return out
@@ -218,7 +218,7 @@ class Transpose(Function, Module):
 # This function is designed to be used directly with Tensor objects.
 def matmul(A, B):
     return MatMul()(A, B)
-def linear(X, W, b):
+def linear(X, W, b=0):
     return Linear()(X, W, b)
 def dot(A, B):
     return MatMul()(A, B)
