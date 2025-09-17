@@ -1,8 +1,11 @@
 ### DEVICE SETUP
+import warnings
 from .utils.device import auto_detect_device
 DEVICE = auto_detect_device()
 if DEVICE == "cpu":
     import numpy as xp
+    CUDNN_AVAILABLE = False
+    CUTENSOR_AVAILABLE = False
 elif DEVICE == "cuda":
     import os, sys, subprocess, pathlib
     # Remove CuPy if already imported
@@ -27,6 +30,21 @@ elif DEVICE == "cuda":
     # Set accelerators
     os.environ["CUPY_ACCELERATORS"] = "cub,cutensor,cutensornet"  # or "cub,cutensor" if you want both
     import cupy as xp
+    import cupy
+    try:
+        from cupy.cuda import cudnn
+        CUDNN_AVAILABLE = True
+    except:
+        CUDNN_AVAILABLE = False
+        warnings.warn("cuDNN not available, Convolution and BatchNorm will use fallback CUPY implementations."
+            "They are still GPU-accelerated but may be significantly slower than cuDNN.")
+    try:
+        from cupy.cuda import cutensor
+        CUTENSOR_AVAILABLE = True
+    except:
+        CUTENSOR_AVAILABLE = False
+        warnings.warn("cuTENSOR not available, CUPY's tensordot and einsum will be slower.")
+
     # xp.cuda.set_allocator(None)  # Use default memory pool
     # xp.cuda.set_pinned_memory_allocator(None)  # Use default pinned memory pool
 

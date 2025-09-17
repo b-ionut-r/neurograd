@@ -5,6 +5,6 @@ from .tensor_ops import Reshape, Flatten, Squeeze, ExpandDims, Pad, SlidingWindo
 reshape, flatten, squeeze, expand_dims, pad, sliding_window_view, newaxis
 from .reductions import Sum, Mean, Max, Min, Std, Var, sum, mean, max, min, std, var
 from .activations import ReLU, LeakyReLU, ReLU6, Sigmoid, Softmax, Tanh, relu, leaky_relu, relu6, sigmoid, softmax, tanh
-from .normalize import BatchNormalizer, batch_normalize 
+from .normalize import BatchNormalizer, BatchNormalizerCUDNN
 from .base import Function
 from .conv import Convolver, conv2d, pool2d, maxpool2d, averagepool2d, pooling2d, maxpooling2d, averagepooling2d

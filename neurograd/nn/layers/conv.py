@@ -4,6 +4,7 @@ from .batchnorm import BatchNorm2D
 from .dropout import Dropout2D
 from typing import TYPE_CHECKING, Union, Tuple, Sequence, Literal
 from numpy.typing import ArrayLike
+import traceback
 
 class Conv2D(Module):
 
@@ -81,8 +82,8 @@ class Conv2D(Module):
     def forward(self, X):
         X = X.cast(self.dtype) if self.dtype else X
         # Convolve
-        from neurograd.functions.conv import Convolver, CUDNN_AVAILABLE
-        from neurograd import conv2d
+        from neurograd import CUDNN_AVAILABLE
+        from neurograd.functions.conv import conv2d, Convolver
         if self.backend == "cudnn" and CUDNN_AVAILABLE:
             try:
                 if self.convolver is None:

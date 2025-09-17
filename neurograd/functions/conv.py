@@ -1,21 +1,21 @@
-from neurograd import xp
+from neurograd import xp, CUDNN_AVAILABLE
 from neurograd.functions import Function
 from typing import TYPE_CHECKING, Union, Tuple, Sequence, Literal
 import numpy as np
 from numpy.typing import ArrayLike
 if TYPE_CHECKING:
     from neurograd.tensor import Tensor
-if xp is not np:
-    import cupy 
-    try:
-        from cupy.cuda import cudnn
-        CUDNN_AVAILABLE = True
-    except:
-        CUDNN_AVAILABLE = False
+
+
+try:
+    import cupy
+    from cupy.cuda import cudnn
+except:
+    pass
 
 
 
-# Implementation with cuDNN backend
+### Implementation with cuDNN backend
 class Convolver(Function):
     """2D Convolution operation using cuDNN backend for GPU acceleration."""
     name = "Convolver"
@@ -23,7 +23,8 @@ class Convolver(Function):
                  padding: Union[int, Tuple[int, int], Literal["valid", "same"]] = (0, 0),
                  dilation: Union[int, Tuple[int, int]] = (1, 1),
                  depthwise: bool = False, autotune: int = 5):
-        assert CUDNN_AVAILABLE, "cuDNN is required for Convolver but is not available."
+        if not CUDNN_AVAILABLE:
+            raise RuntimeError("cuDNN is not available. Cannot use cuDNN Convolver.")
         Function.__init__(self)
         self.strides = (strides, strides) if isinstance(strides, int) else strides
         self.padding_mode = padding  # Store original for "same"/"valid" handling
@@ -314,7 +315,7 @@ class Convolver(Function):
 
 
 
-# Implementation without cuDNN (pure NeuroGrad)
+### Implementation without cuDNN (pure NeuroGrad)
 def conv2d(input: Union["Tensor", xp.ndarray], filters: Union["Tensor", xp.ndarray],
            strides: Union[int, Tuple[int, ...]] = (1, 1),
            padding: Union[Sequence, ArrayLike, int, Literal["valid", "same"]] = (0, 0),
