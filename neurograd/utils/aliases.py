@@ -28,3 +28,4 @@ INITIALIZERS = {
     "zeros": Zeros,
     "normal": Normal
 }
+#fixed
