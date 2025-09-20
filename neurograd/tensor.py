@@ -13,7 +13,7 @@ class Tensor:
         if isinstance(data, Tensor):
             pass
         if not isinstance(data, xp.ndarray):
-            self.data = xp.array(data, dtype=dtype) if dtype else xp.array(data)
+            self.data = xp.array(data, dtype=dtype) if dtype is not None else xp.array(data)
         elif dtype is not None:
             self.data = data.astype(dtype, copy=False)
         else:

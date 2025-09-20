@@ -91,9 +91,9 @@ class Conv2D(Module):
                 Z = self.convolver(X, self.kernels)
             except Exception as e:
                 import traceback
-                print(f"cuDNN Convolver failed: {e}. Falling back to regular conv2d.")
-                print("Full traceback:")
-                traceback.print_exc()
+                # print(f"cuDNN Convolver failed: {e}. Falling back to regular conv2d.")
+                # print("Full traceback:")
+                # traceback.print_exc()
                 Z = conv2d(X, self.kernels, self.strides, self.padding, 
                         self.padding_value, depthwise=self.depthwise)
                 self.backend = "xp"  # Switch to xp backend after failure
