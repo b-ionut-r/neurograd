@@ -4,17 +4,6 @@ from .base import Function
 from neurograd.nn.module import Module
 
 # Mathematical functions classes for Functional API
-class Log(Function, Module):
-    name = "Log"
-    def __init__(self):
-        Function.__init__(self)
-        Module.__init__(self)
-    def forward(self, x: xp.ndarray) -> xp.ndarray:
-        return xp.log(x)
-    def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
-        x = self.parent_tensors[0]
-        return grad_output / x.data if x.requires_grad else None
-
 class Exp(Function, Module):
     name = "Exp"
     @ng.fuse
@@ -28,6 +17,17 @@ class Exp(Function, Module):
     def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
         x = self.parent_tensors[0]
         return Exp._fused_bw(grad_output, x.data) if x.requires_grad else None
+
+class Log(Function, Module):
+    name = "Log"
+    def __init__(self):
+        Function.__init__(self)
+        Module.__init__(self)
+    def forward(self, x: xp.ndarray) -> xp.ndarray:
+        return xp.log(x)
+    def backward(self, grad_output: xp.ndarray) -> xp.ndarray:
+        x = self.parent_tensors[0]
+        return grad_output / x.data if x.requires_grad else None
     
 class Sqrt(Function, Module):
     name = "Sqrt"

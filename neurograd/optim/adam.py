@@ -26,17 +26,6 @@ class Adam(Optimizer):
     def __init__(self, model_parameters: Generator[Tuple[str, Tensor], None, None], lr: float = 0.01,
                  beta1: float = 0.9, beta2: float = 0.999, epsilon: float = 1e-8,
                  weight_decay: float = 0.0) -> None:
-        """
-        Initializes the Adam optimizer.
-
-        Args:
-            model_parameters (Generator[Tuple[str, Tensor]]): Named parameters of the model to optimize.
-            lr (float): Learning rate for the optimizer.
-            beta1 (float): Exponential decay rate for the first moment estimate.
-            beta2 (float): Exponential decay rate for the second moment estimate.
-            epsilon (float): Small value to prevent division by zero.
-            weight_decay(float): Weight decay factor for the optimizer (L2/Ridge).
-        """
         super().__init__(model_parameters, lr, weight_decay)
         self.first_momentum = [(name, xp.zeros_like(param.data)) for name, param in self.params]
         self.second_momentum = [(name, xp.zeros_like(param.data)) for name, param in self.params]

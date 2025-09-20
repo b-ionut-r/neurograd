@@ -194,28 +194,22 @@ class ImageFolder(Dataset):
         # Convert targets to numeric labels
         self.numeric_targets = [self.target_mapping[t] for t in self.targets]
 
-        # print(f"ImageFolder initialized: {len(self)} samples, {self.num_classes} classes")
-
     def get_class_name(self, class_idx: int) -> str:
-        """Get class name from class index"""
         if class_idx < 0 or class_idx >= len(self.target_names):
             raise ValueError(f"Class index {class_idx} out of range [0, {len(self.target_names)-1}]")
         return self.target_names[class_idx]
     
     def get_class_index(self, class_name: str) -> int:
-        """Get class index from class name"""
         if class_name not in self.target_mapping:
             raise ValueError(f"Class name '{class_name}' not found in dataset")
         return self.target_mapping[class_name]
     
     def get_one_hot(self, class_idx: int) -> np.ndarray:
-        """Get one-hot encoding from class index"""
         if class_idx not in self.one_hot_mapping:
             raise ValueError(f"Class index {class_idx} not found in one-hot mapping")
         return self.one_hot_mapping[class_idx]
     
     def get_class_from_one_hot(self, one_hot: np.ndarray) -> int:
-        """Get class index from one-hot encoding"""
         if one_hot.shape != (self.num_classes,):
             raise ValueError(f"One-hot encoding must have shape ({self.num_classes},), got {one_hot.shape}")
         
@@ -225,38 +219,40 @@ class ImageFolder(Dataset):
             
         return class_idx
 
+
     def _collect_paths(self):
-        """Collect image paths and their class labels"""
+        """Collect image paths and their class labels, skipping hidden files/dirs."""
         if not os.path.exists(self.root) or not os.path.isdir(self.root):
             raise ValueError(f"Root directory {self.root} does not exist or is not a directory")
-        
         # Method 1: Class folders (ImageNet style)
-        for class_name in os.listdir(self.root):
+        for class_name in sorted(os.listdir(self.root)):
+            if class_name.startswith('.'):
+                continue
             class_path = os.path.join(self.root, class_name)
             if not os.path.isdir(class_path):
                 continue
             
             for ext in IMG_EXTS:
-                pattern = os.path.join(class_path, f"*{ext}")
-                for img_path in glob.glob(pattern):
-                    self.images.append(img_path)
-                    self.targets.append(class_name)
-        
-        # Method 2: If no class folders found, walk directory tree
+                for img_path in glob.glob(os.path.join(class_path, f"*{ext}")):
+                    if not os.path.basename(img_path).startswith('.'):
+                        self.images.append(img_path)
+                        self.targets.append(class_name)
+        # Method 2: Fallback if no class folders found
         if not self.images:
-            for r, _, files in os.walk(self.root):
-                for f in files:
-                    if any(f.lower().endswith(ext) for ext in IMG_EXTS):
-                        p = os.path.join(r, f)
-                        cls = os.path.basename(os.path.dirname(p))
-                        self.images.append(p)
-                        self.targets.append(cls)
+            for root, dirs, files in os.walk(self.root, topdown=True):
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                for filename in sorted(files):
+                    if filename.startswith('.') or not any(filename.lower().endswith(ext) for ext in IMG_EXTS):
+                        continue
+                    path = os.path.join(root, filename)
+                    class_label = os.path.basename(os.path.dirname(path))
+                    self.images.append(path)
+                    self.targets.append(class_label)
 
 
     def get_dali_pipeline(self, batch_size: int, shuffle: bool = True, 
                           device: str = "cpu", num_threads: int = 4, 
                           prefetch: int = 2, seed: int = 42):
-        """Create optimized DALI pipeline for this dataset (only when DALI is available)"""
         if not DALI_AVAILABLE:
             return None
             
@@ -264,26 +260,46 @@ class ImageFolder(Dataset):
             return self.img_transform
 
         is_gpu = device == "gpu"
-        h, w = self.img_shape or (224, 224)
+        
+        # ### MODIFICATION: Logic to handle different image modes ###
+        mode_upper = self.img_mode.upper()
+        if mode_upper in ("L", "GRAY", "GREY", "GRAYSCALE"):
+            dali_output_type = types.GRAY
+            # Grayscale normalization (mean of ImageNet RGB means/stds)
+            norm_mean = [0.449 * 255]
+            norm_std = [0.226 * 255]
+        else:
+            dali_output_type = types.RGB
+            # Standard ImageNet RGB normalization
+            norm_mean = [0.485 * 255, 0.456 * 255, 0.406 * 255]
+            norm_std = [0.229 * 255, 0.224 * 255, 0.225 * 255]
+
         @pipeline_def(batch_size=batch_size, num_threads=num_threads, device_id=0 if is_gpu else None, seed=seed,
                       prefetch_queue_depth=prefetch)
         def image_pipeline():
             images, labels = fn.readers.file(files=self.images, labels=self.numeric_targets, 
                                              random_shuffle=shuffle, name="Reader",
                                              initial_fill=4096, read_ahead=True,
-                                             dont_use_mmap=self.dont_use_mmap, # Crucial for network storage
+                                             dont_use_mmap=self.dont_use_mmap,
                                              )
-            images = fn.decoders.image(images, device="mixed" if is_gpu else "cpu", output_type=types.RGB)
-            images = fn.resize(images, resize_x=w, resize_y=h, interp_type=types.INTERP_LINEAR)
+            
+            # ### MODIFICATION: Use the determined DALI output type ###
+            images = fn.decoders.image(images, device="mixed" if is_gpu else "cpu", 
+                                       output_type=dali_output_type)
+            
+            if self.img_shape is not None:
+                h, w = self.img_shape
+                images = fn.resize(images, resize_x=w, resize_y=h, interp_type=types.INTERP_LINEAR)
             
             if self.img_transform and callable(self.img_transform):
                 images = self.img_transform(images)
             
             if self.img_normalize:
+                # ### MODIFICATION: Use the correct mean/std for the image mode ###
                 images = fn.crop_mirror_normalize(
                     images, dtype=types.FLOAT, output_layout="CHW" if self.chw else "HWC",
-                    mean=[0.485 * 255, 0.456 * 255, 0.406 * 255],
-                    std=[0.229 * 255, 0.224 * 255, 0.225 * 255]
+                    mean=norm_mean,
+                    std=norm_std
                 )
             else:
                 if self.chw: images = fn.transpose(images, perm=[2, 0, 1])
@@ -291,14 +307,12 @@ class ImageFolder(Dataset):
             if self.one_hot_targets:
                 labels = fn.one_hot(labels, num_classes=self.num_classes)
 
-            # A DALI pipeline function should return the DataNode objects directly.
             return images, labels
 
         pipeline = image_pipeline()
         return pipeline
 
     def _apply_img_transform(self, arr: np.ndarray) -> np.ndarray:
-        """Apply image transforms (OpenCV fallback path)"""
         if self.img_transform is None:
             return arr
             
@@ -322,7 +336,6 @@ class ImageFolder(Dataset):
             return arr
 
     def _load_image_opencv(self, path: str) -> np.ndarray:
-        """Load image using OpenCV (fallback implementation)"""
         mode = (self.img_mode or "RGB").upper()
         if mode in ("L", "GRAY", "GREY", "GRAYSCALE"):
             flag = cv2.IMREAD_GRAYSCALE
@@ -366,7 +379,6 @@ class ImageFolder(Dataset):
         return arr
 
     def __getitem__(self, idx: int):
-        """Get single item - uses OpenCV fallback"""
         img_path = self.images[idx]
         target = self.numeric_targets[idx]
         image = self._load_image_opencv(img_path)
@@ -380,7 +392,6 @@ class ImageFolder(Dataset):
         return Tensor(image, dtype=self.img_dtype), Tensor(target, dtype=target_dtype)
 
     def shuffle(self, seed: Optional[int] = None):
-        """Shuffle the dataset"""
         rng = random.Random(seed) if seed is not None else random.Random()
         combined = list(zip(self.images, self.targets, self.numeric_targets))
         rng.shuffle(combined)
@@ -454,7 +465,6 @@ class DataLoader:
         if self._pipeline:
             policy = LastBatchPolicy.DROP if self.drop_last else LastBatchPolicy.PARTIAL
             self._dali_iter = DALIGenericIterator(self._pipeline, ["images", "labels"], policy, reader_name="Reader")
-            # print(f"DALI pipeline initialized: batch_size={self.batch_size}, device={self.device}, num_threads={self.num_workers}")
 
     def __len__(self):
         n = len(self.dataset)
@@ -467,41 +477,28 @@ class DataLoader:
         return self._regular_iterator()
 
     def reset(self):
-        """
-        Resets the internal iterator, particularly for the DALI pipeline.
-        This allows re-iteration over the dataset from the beginning without
-        recreating the DataLoader.
-        """
         if self.use_dali and self._dali_iter:
             self._dali_iter.reset()
-        # For the regular iterator, a new one is created on each __iter__ call,
-        # so an explicit reset is not strictly necessary in the same way.
 
-    
     def _dali_iterator(self):
         for data in self._dali_iter:
-            # The pipeline outputs DALI Tensors which are extracted from the output dictionary.
-            images_tensor = data[0]["images"]  # This is a TensorListGPU containing the batch
-            labels_tensor = data[0]["labels"]  # This is a TensorListGPU containing the batch
+            images_tensor = data[0]["images"]
+            labels_tensor = data[0]["labels"]
             
-            # Convert DALI TensorList to proper arrays
             if self.device == 'gpu':
                 import cupy as cp
-                # For GPU TensorList, convert to cupy arrays
                 images_array = cp.asarray(images_tensor.as_tensor())
                 labels_array = cp.asarray(labels_tensor.as_tensor())
                 
                 X = Tensor(images_array, dtype=self.dataset.img_dtype)
                 y = Tensor(labels_array, dtype=self.dataset.target_dtype if not self.dataset.one_hot_targets else float32)
-            else: # CPU device
-                # For CPU TensorList, convert to numpy array
+            else:
                 X = Tensor(images_tensor.as_array(), dtype=self.dataset.img_dtype)
                 y = Tensor(labels_tensor.as_array(), dtype=self.dataset.target_dtype if not self.dataset.one_hot_targets else float32)
     
             yield X, y
             
     def _regular_iterator(self):
-        """Fallback iterator with threading and prefetching."""
         batches = list(self._batch_indices())
         window = deque()
         next_to_submit = 0
@@ -565,6 +562,7 @@ class DataLoader:
 
 def create_dali_transforms(
     device: str = "gpu",
+    random_resized_crop_size: Optional[Tuple[int, int]] = None,
     brightness: float = 0.0,
     contrast: float = 0.0,
     saturation: float = 0.0,
@@ -575,6 +573,7 @@ def create_dali_transforms(
 ):
     """
     Create common DALI augmentation transforms.
+    If `random_resized_crop_size` is provided, it will be the FIRST operation.
     Returns None if DALI is not available.
     """
     if not DALI_AVAILABLE:
@@ -582,6 +581,16 @@ def create_dali_transforms(
         return None
         
     def apply_transforms(images):
+        if random_resized_crop_size:
+            images = fn.random_resized_crop(
+                images,
+                device=device,
+                size=random_resized_crop_size,
+                random_area=[0.08, 1.0],  # Standard scale range for ImageNet
+                random_aspect_ratio=[0.75, 1.333], # Standard aspect ratio range
+                interp_type=types.INTERP_LINEAR
+            )
+            
         if brightness or contrast or saturation or hue:
             images = fn.color_twist(
                 images, device=device,
@@ -604,12 +613,7 @@ def create_dali_transforms(
     return apply_transforms
 
 
-
-
 def is_on_network_drive(path_to_check: str) -> bool:
-    """
-    Detects if the given path is on a network-mounted filesystem.
-    """
     if not os.path.exists(path_to_check):
         raise FileNotFoundError(f"Path does not exist: {path_to_check}")
     NETWORK_FS_TYPES = [
@@ -618,17 +622,14 @@ def is_on_network_drive(path_to_check: str) -> bool:
     ]
     target_path = os.path.abspath(path_to_check)
     partitions = psutil.disk_partitions(all=True)
-    # Find the most specific mount point for the path
     longest_match = None
     for p in partitions:
         if target_path.startswith(p.mountpoint):
             if longest_match is None or len(p.mountpoint) > len(longest_match.mountpoint):
                 longest_match = p
     if longest_match is None:
-        # Could not find any mount, assume local
         return False
     fs_type = longest_match.fstype.lower()
     if fs_type in NETWORK_FS_TYPES:
         return True
-    # Overlay is usually local (Docker /tmp), so treat it as local
     return False

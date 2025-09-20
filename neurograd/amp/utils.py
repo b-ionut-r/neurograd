@@ -24,7 +24,7 @@ _FP32_OPS: Set[str] = {
     # pow is risky in fp16 except for tiny integer exponents
     "pow",
     # normalization
-    "batchnormalizer",
+    "batchnormalizer", "batchnormalizercudnn",
 }
 
 # Ops that are **safe** to run in FP16 (or BF16) by default
@@ -44,7 +44,8 @@ _FP16_SAFE_OPS: Set[str] = {
 
 
 # FP32 ops that should not pre-cast inputs; instead, compute with FP32 accumulation
-_FP32_NO_PRECAST: Set[str] = {"sum", "mean", "std", "var", "batchnormalizer"}
+_FP32_NO_PRECAST: Set[str] = {"sum", "mean", "std", "var", "batchnormalizer",
+                              "batchnormalizercudnn"}
 
 def should_cast_to_fp16(op_name: str) -> bool:
     """
