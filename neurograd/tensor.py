@@ -7,11 +7,16 @@ from numpy.typing import ArrayLike
 class Tensor:
     id = 0 # Unique identifier for each tensor
 
+    def __new__(cls, data, *args, **kwargs):
+        if isinstance(data, Tensor):
+            return data
+        return super().__new__(cls)
+
     def __init__(self, data, requires_grad: bool = False,
                  grad_fn: Optional[Callable] = None, name: Optional[str] = None,
                  dtype: Optional[str] = None):
         if isinstance(data, Tensor):
-            pass
+            return # avoid rewrapping a Tensor
         if not isinstance(data, xp.ndarray):
             self.data = xp.array(data, dtype=dtype) if dtype is not None else xp.array(data)
         elif dtype is not None:
