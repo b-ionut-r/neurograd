@@ -594,10 +594,10 @@ def create_dali_transforms(
         if brightness or contrast or saturation or hue:
             images = fn.color_twist(
                 images, device=device,
-                brightness=fn.random.uniform(range=[-brightness, brightness]),
-                contrast=fn.random.uniform(range=[1-contrast, 1+contrast]),
-                saturation=fn.random.uniform(range=[1-saturation, 1+saturation]),
-                hue=fn.random.uniform(range=[-hue, hue]),
+                brightness=fn.random.uniform(range=[1.0 - brightness, 1.0 + brightness]),
+                contrast=fn.random.uniform(range=[1.0 - contrast, 1.0 + contrast]),
+                saturation=fn.random.uniform(range=[1.0 - saturation, 1.0 + saturation]),
+                hue=fn.random.uniform(range=[-hue, hue]),  # hue is already in degrees
             )
         if horizontal_flip_prob > 0.0:
             images = fn.flip(images, device=device, horizontal=fn.random.coin_flip(probability=horizontal_flip_prob))
